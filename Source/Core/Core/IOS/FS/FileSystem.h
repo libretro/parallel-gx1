@@ -282,15 +282,25 @@ private:
   struct FstEntry
   {
     bool CheckPermission(Uid uid, Gid gid, Mode requested_mode) const;
-    std::string name;
-    Metadata data{};
-    /// Children of this FST entry. Only valid for directories.
+    // A path's components are not limited to a filename's length; fst.bin keeps 12 characters
+    char name[MaxPathLength + 1];
+    Metadata data;
+    /// Children of this FST entry, owned. Only valid for directories.
     ///
-    /// We use a vector rather than a list here because iterating over children
-    /// happens a lot more often than removals.
-    /// Newly created entries are added at the end.
-    std::vector<FstEntry> children;
+    /// An array rather than a list because iterating over children happens a lot more often
+    /// than removals. Newly created entries are added at the end; it grows by doubling.
+    FstEntry* children;
+    u32 child_count;
+    u32 child_capacity;
   };
+  // Frees entry's children, and theirs, leaving it without any
+  static void FreeFstChildren(FstEntry* entry);
+  // A zeroed child at the end of parent's children, or nullptr when out of memory; it may move
+  // the other children
+  static FstEntry* AddFstChild(FstEntry* parent);
+  // Removes and frees parent's child at index
+  static void RemoveFstChild(FstEntry* parent, u32 index);
+  static FstEntry* FindFstChild(FstEntry* parent, const char* name);
 
   enum
   {
@@ -346,7 +356,7 @@ private:
   /// Get the FST entry for a file (or directory).
   /// Automatically creates fallback entries for parents if they do not exist.
   /// Returns nullptr if the path is invalid or the file does not exist.
-  FstEntry* GetFstEntryForPath(const std::string& path);
+  FstEntry* GetFstEntryForPath(const char* path);
 
   /// FST entry for the filesystem root.
   ///
@@ -356,7 +366,7 @@ private:
   /// The reasons for this design are twofold: existing users do not have a FST
   /// and we do not want FS to break if the user adds or removes files in their
   /// filesystem root manually.
-  FstEntry m_root_entry{};
+  FstEntry m_root_entry{};  // its children are freed with the file system
   std::string m_root_path;
   HostFile m_host_files[NUM_HANDLES];
   Handle m_handles[NUM_HANDLES];

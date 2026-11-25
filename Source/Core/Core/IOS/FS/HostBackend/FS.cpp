@@ -149,6 +149,60 @@ bool FileSystem::FstEntry::CheckPermission(Uid caller_uid, Gid caller_gid,
   return (u8(requested_mode) & u8(file_mode)) == u8(requested_mode);
 }
 
+void FileSystem::FreeFstChildren(FstEntry* entry)
+{
+  for (u32 i = 0; i < entry->child_count; i++)
+    FreeFstChildren(&entry->children[i]);
+  std::free(entry->children);
+  entry->children = nullptr;
+  entry->child_count = 0;
+  entry->child_capacity = 0;
+}
+
+FileSystem::FstEntry* FileSystem::AddFstChild(FstEntry* parent)
+{
+  if (parent->child_count == parent->child_capacity)
+  {
+    const u32 capacity = parent->child_capacity ? parent->child_capacity * 2 : 4;
+    FstEntry* const grown =
+        static_cast<FstEntry*>(std::realloc(parent->children, capacity * sizeof(FstEntry)));
+    if (!grown)
+      return nullptr;
+    parent->children = grown;
+    parent->child_capacity = capacity;
+  }
+  FstEntry* const child = &parent->children[parent->child_count++];
+  std::memset(child, 0, sizeof(*child));
+  return child;
+}
+
+void FileSystem::RemoveFstChild(FstEntry* parent, u32 index)
+{
+  FreeFstChildren(&parent->children[index]);
+  std::memmove(&parent->children[index], &parent->children[index + 1],
+               (parent->child_count - index - 1) * sizeof(FstEntry));
+  parent->child_count--;
+}
+
+FileSystem::FstEntry* FileSystem::FindFstChild(FstEntry* parent, const char* name)
+{
+  for (u32 i = 0; i < parent->child_count; i++)
+  {
+    if (!std::strcmp(parent->children[i].name, name))
+      return &parent->children[i];
+  }
+  return nullptr;
+}
+
+// Copies name into an FST entry's, cut to the longest a valid path has
+static void SetFstName(char* out, const char* name, size_t name_length)
+{
+  if (name_length > MaxPathLength)
+    name_length = MaxPathLength;
+  std::memcpy(out, name, name_length);
+  out[name_length] = '\0';
+}
+
 FileSystem::FileSystem(std::string root_path) : m_root_path{std::move(root_path)}
 {
   while (m_root_path.ends_with('/'))
@@ -161,6 +215,7 @@ FileSystem::FileSystem(std::string root_path) : m_root_path{std::move(root_path)
 FileSystem::~FileSystem()
 {
   CloseAllHandles();
+  FreeFstChildren(&m_root_entry);
 }
 
 std::string FileSystem::GetFstFilePath() const
@@ -170,8 +225,9 @@ std::string FileSystem::GetFstFilePath() const
 
 void FileSystem::ResetFst()
 {
-  m_root_entry = {};
-  m_root_entry.name = "/";
+  FreeFstChildren(&m_root_entry);
+  std::memset(&m_root_entry, 0, sizeof(m_root_entry));
+  SetFstName(m_root_entry.name, "/", 1);
   // Mode 0x16 (Directory | Owner_None | Group_Read | Other_Read) in the FS sysmodule
   m_root_entry.data.modes = {Mode::None, Mode::Read, Mode::Read};
 }
@@ -193,35 +249,55 @@ void FileSystem::LoadFst()
     if (!file.ReadArray(&entry, 1))
       return false;
 
-    result->name = entry.GetName();
+    SetFstName(result->name, entry.name, strnlen(entry.name, ARRAY_SIZE(entry.name)));
     CopyMetadataFields(&result->data, entry);
     for (size_t i = 0; i < entry.num_children; ++i)
     {
-      if (!parse(parse, depth + 1, &result->children.emplace_back()))
+      // The child is parsed into place; the parent's array may move while it is
+      FstEntry* const child = AddFstChild(result);
+      if (!child || !parse(parse, depth + 1, child))
         return false;
     }
     return true;
   };
 
-  FstEntry root_entry;
+  FstEntry root_entry = {};
   if (!parse_entry(parse_entry, 0, &root_entry))
   {
     ERROR_LOG(IOS_FS, "Failed to parse FST: at least one of the entries was invalid");
+    FreeFstChildren(&root_entry);
     return;
   }
-  m_root_entry = std::move(root_entry);
+  FreeFstChildren(&m_root_entry);
+  m_root_entry = root_entry;
 }
 
 void FileSystem::SaveFst()
 {
-  std::vector<SerializedFstEntry> to_write;
-  auto collect_entries = [&to_write](const auto& collect, const FstEntry& entry) -> void {
-    SerializedFstEntry& serialized = to_write.emplace_back();
+  // The tree, depth first, each entry followed by its children
+  const auto count_entries = [](const auto& count, const FstEntry& entry) -> size_t {
+    size_t total = 1;
+    for (u32 i = 0; i < entry.child_count; i++)
+      total += count(count, entry.children[i]);
+    return total;
+  };
+  const size_t entry_count = count_entries(count_entries, m_root_entry);
+  SerializedFstEntry* const to_write =
+      static_cast<SerializedFstEntry*>(std::calloc(entry_count, sizeof(SerializedFstEntry)));
+  if (!to_write)
+  {
+    PanicAlert("IOS_FS: Failed to write new FST");
+    return;
+  }
+  size_t written = 0;
+  const auto collect_entries = [to_write, &written](const auto& collect,
+                                                    const FstEntry& entry) -> void {
+    SerializedFstEntry& serialized = to_write[written++];
     serialized.SetName(entry.name);
     CopyMetadataFields(&serialized, entry.data);
-    serialized.num_children = u32(entry.children.size());
-    for (const FstEntry& child : entry.children)
-      collect(collect, child);
+    serialized.num_children = entry.child_count;
+    for (u32 i = 0; i < entry.child_count; i++)
+      collect(collect, entry.children[i]);
   };
   collect_entries(collect_entries, m_root_entry);
 
@@ -230,7 +306,9 @@ void FileSystem::SaveFst()
   {
     // This temporary file must be closed before it can be renamed.
     File::IOFile file{temp_path, "wb"};
-    if (!file.WriteArray(to_write.data(), to_write.size()))
+    const bool ok = file.WriteArray(to_write, entry_count);
+    std::free(to_write);
+    if (!ok)
     {
       PanicAlert("IOS_FS: Failed to write new FST");
       return;
@@ -240,53 +318,55 @@ void FileSystem::SaveFst()
     PanicAlert("IOS_FS: Failed to rename temporary FST file");
 }
 
-FileSystem::FstEntry* FileSystem::GetFstEntryForPath(const std::string& path)
+FileSystem::FstEntry* FileSystem::GetFstEntryForPath(const char* path)
 {
-  if (path == "/")
+  if (!std::strcmp(path, "/"))
     return &m_root_entry;
 
   if (!IsValidNonRootPath(path))
     return nullptr;
 
-  const File::FileInfo host_file_info{BuildFilename(path)};
+  char host_path[HOST_PATH_SIZE];
+  if (!BuildFilename(path, host_path, sizeof(host_path)))
+    return nullptr;
+  const File::FileInfo host_file_info{host_path};
   if (!host_file_info.Exists())
     return nullptr;
 
+  // A valid non-root path is '/' and components of at most MaxFilenameLength between '/'s
   FstEntry* entry = &m_root_entry;
-  std::string complete_path = "";
-  for (const std::string& component : SplitString(std::string(path.substr(1)), '/'))
+  const char* component = path + 1;
+  while (*component)
   {
-    complete_path += '/' + component;
-    FstEntry* next = nullptr;
-    for (FstEntry& child : entry->children)
-    {
-      if (child.name == component)
-      {
-        next = &child;
-        break;
-      }
-    }
-    if (next)
-    {
-      entry = next;
-    }
-    else
+    const char* const end = std::strchr(component, '/');
+    const size_t length = end ? size_t(end - component) : std::strlen(component);
+    char name[MaxPathLength + 1];
+    SetFstName(name, component, length);
+
+    FstEntry* next = FindFstChild(entry, name);
+    if (!next)
     {
       // Fall back to dummy data to avoid breaking existing filesystems.
       // This code path is also reached when creating a new file or directory;
       // proper metadata is filled in later.
-      INFO_LOG(IOS_FS, "Creating a default entry for %s", complete_path.c_str());
-      entry = &entry->children.emplace_back();
-      entry->name = component;
-      entry->data.modes = {Mode::ReadWrite, Mode::ReadWrite, Mode::ReadWrite};
+      INFO_LOG(IOS_FS, "Creating a default entry for %.*s", int(component + length - path), path);
+      next = AddFstChild(entry);
+      if (!next)
+        return nullptr;
+      std::memcpy(next->name, name, sizeof(name));
+      next->data.modes = {Mode::ReadWrite, Mode::ReadWrite, Mode::ReadWrite};
     }
+    entry = next;
+    component += length;
+    if (*component == '/')
+      component++;
   }
 
   entry->data.is_file = host_file_info.IsFile();
-  if (entry->data.is_file && !entry->children.empty())
+  if (entry->data.is_file && entry->child_count)
   {
-    WARN_LOG(IOS_FS, "%s is a file but also has children; clearing children", path.c_str());
-    entry->children.clear();
+    WARN_LOG(IOS_FS, "%s is a file but also has children; clearing children", path);
+    FreeFstChildren(entry);
   }
 
   return entry;
@@ -427,7 +507,7 @@ ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string
   const auto split_path = SplitPathAndBasename(path);
   const std::string host_path = BuildFilename(path);
 
-  FstEntry* parent = GetFstEntryForPath(split_path.parent);
+  FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
   if (!parent)
     return ResultCode::NotFound;
 
@@ -444,9 +524,12 @@ ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string
     return ResultCode::UnknownError;
   }
 
-  FstEntry* child = GetFstEntryForPath(path);
-  *child = {};
-  child->name = split_path.file_name;
+  FstEntry* child = GetFstEntryForPath(path.c_str());
+  if (!child)
+    return ResultCode::UnknownError;
+  FreeFstChildren(child);
+  std::memset(child, 0, sizeof(*child));
+  SetFstName(child->name, split_path.file_name.c_str(), split_path.file_name.size());
   child->data.is_file = is_file;
   child->data.modes = modes;
   child->data.uid = uid;
@@ -498,7 +581,7 @@ ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   const std::string host_path = BuildFilename(path);
   const auto split_path = SplitPathAndBasename(path);
 
-  FstEntry* parent = GetFstEntryForPath(split_path.parent);
+  FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
   if (!parent)
     return ResultCode::NotFound;
 
@@ -515,11 +598,11 @@ ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   else
     return ResultCode::InUse;
 
-  for (size_t i = 0; i < parent->children.size(); i++)
+  for (u32 i = 0; i < parent->child_count; i++)
   {
-    if (parent->children[i].name == split_path.file_name)
+    if (!std::strcmp(parent->children[i].name, split_path.file_name.c_str()))
     {
-      parent->children.erase(parent->children.begin() + i);
+      RemoveFstChild(parent, i);
       break;
     }
   }
@@ -537,8 +620,8 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
   const auto split_old_path = SplitPathAndBasename(old_path);
   const auto split_new_path = SplitPathAndBasename(new_path);
 
-  FstEntry* old_parent = GetFstEntryForPath(split_old_path.parent);
-  FstEntry* new_parent = GetFstEntryForPath(split_new_path.parent);
+  FstEntry* old_parent = GetFstEntryForPath(split_old_path.parent.c_str());
+  FstEntry* new_parent = GetFstEntryForPath(split_new_path.parent.c_str());
   if (!old_parent || !new_parent)
     return ResultCode::NotFound;
 
@@ -548,7 +631,7 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
     return ResultCode::AccessDenied;
   }
 
-  FstEntry* entry = GetFstEntryForPath(old_path);
+  FstEntry* entry = GetFstEntryForPath(old_path.c_str());
   if (!entry)
     return ResultCode::NotFound;
 
@@ -584,18 +667,33 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
     return ResultCode::NotFound;
   }
 
-  FstEntry* new_entry = GetFstEntryForPath(new_path);
-  new_entry->name = split_new_path.file_name;
+  FstEntry* new_entry = GetFstEntryForPath(new_path.c_str());
+  if (!new_entry)
+  {
+    SaveFst();
+    return ResultCode::Success;
+  }
+  SetFstName(new_entry->name, split_new_path.file_name.c_str(), split_new_path.file_name.size());
+  // Adding the new entry may have moved the array the old parent lives in
+  old_parent = GetFstEntryForPath(split_old_path.parent.c_str());
 
   // Finally, remove the child from the old parent and move it to the new parent.
-  for (size_t i = 0; i < old_parent->children.size(); i++)
+  for (u32 i = 0; old_parent && i < old_parent->child_count; i++)
   {
     FstEntry& old_entry = old_parent->children[i];
-    if (old_entry.name != split_old_path.file_name)
+    if (std::strcmp(old_entry.name, split_old_path.file_name.c_str()))
       continue;
+    if (&old_entry == new_entry)
+      break;
     new_entry->data = old_entry.data;
-    new_entry->children = std::move(old_entry.children);
-    old_parent->children.erase(old_parent->children.begin() + i);
+    FreeFstChildren(new_entry);
+    new_entry->children = old_entry.children;
+    new_entry->child_count = old_entry.child_count;
+    new_entry->child_capacity = old_entry.child_capacity;
+    old_entry.children = nullptr;
+    old_entry.child_count = 0;
+    old_entry.child_capacity = 0;
+    RemoveFstChild(old_parent, i);
     break;
   }
 
@@ -610,7 +708,7 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid,
   if (!IsValidPath(path))
     return std::unexpected{ResultCode::Invalid};
 
-  const FstEntry* entry = GetFstEntryForPath(path);
+  const FstEntry* entry = GetFstEntryForPath(path.c_str());
   if (!entry)
     return std::unexpected{ResultCode::NotFound};
 
@@ -641,9 +739,9 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid,
   {
     const std::string& name = host_entry.children[i].virtualName;
     keys[i] = -1;
-    for (size_t j = 0; j < entry->children.size(); j++)
+    for (u32 j = 0; j < entry->child_count; j++)
     {
-      if (entry->children[j].name == name)
+      if (!std::strcmp(entry->children[j].name, name.c_str()))
       {
         keys[i] = int(j);
         break;
@@ -694,12 +792,12 @@ Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const std::string& pa
       return std::unexpected{ResultCode::Invalid};
 
     const auto split_path = SplitPathAndBasename(path);
-    const FstEntry* parent = GetFstEntryForPath(split_path.parent);
+    const FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
     if (!parent)
       return std::unexpected{ResultCode::NotFound};
     if (!parent->CheckPermission(uid, gid, Mode::Read))
       return std::unexpected{ResultCode::AccessDenied};
-    entry = GetFstEntryForPath(path);
+    entry = GetFstEntryForPath(path.c_str());
   }
 
   if (!entry)
@@ -716,7 +814,7 @@ ResultCode FileSystem::SetMetadata(Uid caller_uid, const std::string& path, Uid 
   if (!IsValidPath(path))
     return ResultCode::Invalid;
 
-  FstEntry* entry = GetFstEntryForPath(path);
+  FstEntry* entry = GetFstEntryForPath(path.c_str());
   if (!entry)
     return ResultCode::NotFound;
 
