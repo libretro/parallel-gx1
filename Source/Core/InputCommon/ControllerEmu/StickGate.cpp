@@ -164,7 +164,7 @@ ControlState ReshapableInput::GetInputRadiusAtAngle(double angle) const
   const CalibrationData& calibration = PeekShape().calibration;
 
   // Handle the "default" state.
-  if (calibration.empty())
+  if (calibration.count == 0)
   {
     return GetDefaultInputRadiusAtAngle(angle);
   }
@@ -180,18 +180,19 @@ ControlState ReshapableInput::GetDeadzonePercentage() const
 ControlState ReshapableInput::GetCalibrationDataRadiusAtAngle(const CalibrationData& data,
                                                               double angle)
 {
-  const auto sample_pos = angle / MathUtil::TAU * data.size();
+  const auto sample_pos = angle / MathUtil::TAU * data.count;
   // Interpolate the radius between 2 calibration samples.
-  const u32 sample1_index = u32(sample_pos) % data.size();
-  const u32 sample2_index = (sample1_index + 1) % data.size();
-  const double sample1_angle = sample1_index * MathUtil::TAU / data.size();
-  const double sample2_angle = sample2_index * MathUtil::TAU / data.size();
+  const u32 sample1_index = u32(sample_pos) % data.count;
+  const u32 sample2_index = (sample1_index + 1) % data.count;
+  const double sample1_angle = sample1_index * MathUtil::TAU / data.count;
+  const double sample2_angle = sample2_index * MathUtil::TAU / data.count;
 
   // There is no intersection when the points are on top of each other.
-  double radius = data[sample1_index];
+  double radius = data.samples[sample1_index];
   GetRayLineIntersection(GetPointFromAngleAndLength(angle, 1.0),
-                         GetPointFromAngleAndLength(sample1_angle, data[sample1_index]),
-                         GetPointFromAngleAndLength(sample2_angle, data[sample2_index]), &radius);
+                         GetPointFromAngleAndLength(sample1_angle, data.samples[sample1_index]),
+                         GetPointFromAngleAndLength(sample2_angle, data.samples[sample2_index]),
+                         &radius);
   return radius;
 }
 
@@ -269,13 +270,14 @@ ControlState ReshapableInput::GetDefaultInputRadiusAtAngle(double angle) const
 
 void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
 {
-  CalibrationData calibration(gate.GetIdealCalibrationSampleCount());
+  CalibrationData calibration;
+  const u32 count = gate.GetIdealCalibrationSampleCount();
+  calibration.count = count < CalibrationData::MAX_SAMPLES ? count : CalibrationData::MAX_SAMPLES;
 
-  u32 i = 0;
-  for (auto& val : calibration)
-    val = gate.GetRadiusAtAngle(MathUtil::TAU * i++ / calibration.size());
+  for (u32 i = 0; i < calibration.count; i++)
+    calibration.samples[i] = gate.GetRadiusAtAngle(MathUtil::TAU * i / calibration.count);
 
-  SetCalibrationData(std::move(calibration));
+  SetCalibrationData(calibration);
 }
 
 ReshapableInput::CalibrationData ReshapableInput::GetCalibrationData() const
@@ -284,7 +286,7 @@ ReshapableInput::CalibrationData ReshapableInput::GetCalibrationData() const
   return PeekShape().calibration;
 }
 
-void ReshapableInput::SetCalibrationData(CalibrationData data)
+void ReshapableInput::SetCalibrationData(const CalibrationData& data)
 {
   EditShape([&data](Shape& shape) { shape.calibration = data; });
 }
@@ -317,12 +319,16 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const char* 
   section->Get(key, &load_str, "");
   const auto load_data = SplitString(load_str, ' ');
 
-  CalibrationData calibration(load_data.size(), CALIBRATION_DEFAULT_VALUE);
-
-  auto it = load_data.begin();
-  for (auto& sample : calibration)
+  // Samples past the most a calibration holds are dropped
+  CalibrationData calibration;
+  calibration.count = load_data.size() < CalibrationData::MAX_SAMPLES ?
+                          static_cast<u32>(load_data.size()) :
+                          CalibrationData::MAX_SAMPLES;
+  for (u32 i = 0; i < calibration.count; i++)
   {
-    if (TryParse(*(it++), &sample))
+    ControlState& sample = calibration.samples[i];
+    sample = CALIBRATION_DEFAULT_VALUE;
+    if (TryParse(load_data[i], &sample))
       sample /= CALIBRATION_CONFIG_SCALE;
   }
 
@@ -367,9 +373,10 @@ void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const char* 
   const ReshapeData center = GetCenter();
   // each sample as "%.2f", a space between
   std::string calibration_data;
-  calibration_data.reserve(calibration.size() * 8);
-  for (const ControlState val : calibration)
+  calibration_data.reserve(calibration.count * 8);
+  for (u32 i = 0; i < calibration.count; i++)
   {
+    const ControlState val = calibration.samples[i];
     char text[32];
     CharArrayFromFormat(text, "%s%.2f", calibration_data.empty() ? "" : " ",
                         static_cast<double>(val * CALIBRATION_CONFIG_SCALE));

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include <retro_atomic.h>
 
 #include "Common/Matrix.h"
@@ -78,8 +76,13 @@ enum class ReshapeKind : u8
 class ReshapableInput : public ControlGroup
 {
 public:
-  // Contains input radius maximums at evenly-spaced angles.
-  using CalibrationData = std::vector<ControlState>;
+  // Contains input radius maximums at evenly-spaced angles; none means the default shape.
+  struct CalibrationData
+  {
+    static constexpr u32 MAX_SAMPLES = 64;
+    u32 count;
+    ControlState samples[MAX_SAMPLES];
+  };
 
   ReshapableInput(std::string name, std::string ui_name, GroupType type, ReshapeKind kind);
 
@@ -101,7 +104,7 @@ public:
   static ControlState GetCalibrationDataRadiusAtAngle(const CalibrationData& data, double angle);
 
   CalibrationData GetCalibrationData() const;
-  void SetCalibrationData(CalibrationData data);
+  void SetCalibrationData(const CalibrationData& data);
 
   ReshapeData GetCenter() const;
 
