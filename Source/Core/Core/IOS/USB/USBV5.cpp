@@ -63,7 +63,7 @@ V5IsoMessage::V5IsoMessage(EmulationKernel& ios, const IOCtlVRequest& ioctlv)
   for (size_t i = 0; i < num_packets; ++i)
   {
     const u32 packet_size = memory.Read_U16(static_cast<u32>(packet_sizes_addr + i * sizeof(u16)));
-    packet_sizes.push_back(packet_size);
+    packet_sizes[i] = static_cast<u16>(packet_size);
     total_packet_size += packet_size;
   }
   length = ioctlv.GetVector(2)->size;

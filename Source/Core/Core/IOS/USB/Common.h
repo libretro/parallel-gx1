@@ -156,7 +156,7 @@ struct IntrMessage : TransferCommand
 struct IsoMessage : TransferCommand
 {
   u32 packet_sizes_addr = 0;
-  std::vector<u16> packet_sizes;
+  u16 packet_sizes[256] = {};  // num_packets is a u8
   u32 length = 0;
   u8 num_packets = 0;
   u8 endpoint = 0;

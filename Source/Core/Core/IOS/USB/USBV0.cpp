@@ -3,8 +3,6 @@
 
 #include "Core/IOS/USB/USBV0.h"
 
-#include <vector>
-
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
 #include "Core/HW/Memmap.h"
@@ -56,6 +54,6 @@ V0IsoMessage::V0IsoMessage(EmulationKernel& ios, const IOCtlVRequest& ioctlv)
   num_packets = memory.Read_U8(ioctlv.in_vectors[2].address);
   packet_sizes_addr = ioctlv.io_vectors[0].address;
   for (size_t i = 0; i < num_packets; ++i)
-    packet_sizes.push_back(memory.Read_U16(static_cast<u32>(packet_sizes_addr + i * sizeof(u16))));
+    packet_sizes[i] = (memory.Read_U16(static_cast<u32>(packet_sizes_addr + i * sizeof(u16))));
 }
 }  // namespace IOS::HLE::USB
