@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -39,6 +38,9 @@ class TGCFileReader final : public BlobReaderOfKind<BlobReaderKind::TGC>
 {
 public:
   static TGCFileReader* Create(File::DirectIOFile file);
+  ~TGCFileReader();
+  TGCFileReader(const TGCFileReader&) = delete;
+  TGCFileReader& operator=(const TGCFileReader&) = delete;
 
   BlobType GetBlobType() const { return BlobType::TGC; }
   BlobReader* CopyReader() const;
@@ -59,7 +61,8 @@ private:
   File::DirectIOFile m_file;
   u64 m_size;
 
-  std::vector<u8> m_fst;
+  u8* m_fst = nullptr;
+  size_t m_fst_size = 0;
 
   // Stored as big endian in memory, regardless of the host endianness
   TGCHeader m_header = {};

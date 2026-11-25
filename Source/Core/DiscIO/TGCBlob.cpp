@@ -3,11 +3,11 @@
 
 #include "DiscIO/TGCBlob.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "Common/BitUtils.h"
 #include "Common/Swap.h"
@@ -57,6 +57,11 @@ TGCFileReader* TGCFileReader::Create(File::DirectIOFile file)
   return nullptr;
 }
 
+TGCFileReader::~TGCFileReader()
+{
+  std::free(m_fst);
+}
+
 TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
 {
   m_file.OffsetRead(0, reinterpret_cast<u8*>(&m_header), sizeof(m_header));
@@ -65,14 +70,12 @@ TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
 
   const u32 fst_offset = Common::swap32(m_header.fst_real_offset);
   const u32 fst_size = Common::swap32(m_header.fst_size);
-  m_fst.resize(fst_size);
-  if (!m_file.OffsetRead(fst_offset, m_fst.data(), m_fst.size()))
-  {
-    m_fst.clear();
-  }
+  m_fst = static_cast<u8*>(std::malloc(fst_size ? fst_size : 1));
+  if (m_fst && m_file.OffsetRead(fst_offset, m_fst, fst_size))
+    m_fst_size = fst_size;
 
   constexpr size_t FST_ENTRY_SIZE = 12;
-  if (m_fst.size() < FST_ENTRY_SIZE)
+  if (m_fst_size < FST_ENTRY_SIZE)
     return;
 
   // This calculation can overflow, but this is not a problem, because in that case
@@ -81,8 +84,8 @@ TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
                               Common::swap32(m_header.file_area_virtual_offset) -
                               Common::swap32(m_header.tgc_header_size);
 
-  const size_t claimed_fst_entries = Common::swap32(m_fst.data() + 8);
-  const size_t stored_fst_entries = m_fst.size() / FST_ENTRY_SIZE;
+  const size_t claimed_fst_entries = Common::swap32(m_fst + 8);
+  const size_t stored_fst_entries = m_fst_size / FST_ENTRY_SIZE;
   const size_t fst_entries =
       claimed_fst_entries < stored_fst_entries ? claimed_fst_entries : stored_fst_entries;
   for (size_t i = 0; i < fst_entries; ++i)
@@ -91,9 +94,9 @@ TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
     if (m_fst[i * FST_ENTRY_SIZE] == 0)
     {
       // ...change its offset
-      const u32 old_offset = Common::swap32(m_fst.data() + i * FST_ENTRY_SIZE + 4);
+      const u32 old_offset = Common::swap32(m_fst + i * FST_ENTRY_SIZE + 4);
       const u32 new_offset = Common::swap32(old_offset + file_area_shift);
-      Replace<u32>(0, m_fst.size(), m_fst.data(), i * FST_ENTRY_SIZE + 4, new_offset);
+      Replace<u32>(0, m_fst_size, m_fst, i * FST_ENTRY_SIZE + 4, new_offset);
     }
   }
 }
@@ -119,8 +122,7 @@ bool TGCFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
 
     Replace<u32>(offset, nbytes, out_ptr, 0x0420, replacement_dol_offset);
     Replace<u32>(offset, nbytes, out_ptr, 0x0424, replacement_fst_offset);
-    Replace(offset, nbytes, out_ptr, Common::swap32(replacement_fst_offset), m_fst.size(),
-            m_fst.data());
+    Replace(offset, nbytes, out_ptr, Common::swap32(replacement_fst_offset), m_fst_size, m_fst);
 
     return true;
   }
