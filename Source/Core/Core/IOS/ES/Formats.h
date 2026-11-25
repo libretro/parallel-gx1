@@ -252,7 +252,6 @@ public:
 
   u16 GetNumContents() const;
   bool GetContent(u16 index, Content* content) const;
-  std::vector<Content> GetContents() const;
   bool FindContentById(u32 id, Content* content) const;
 };
 

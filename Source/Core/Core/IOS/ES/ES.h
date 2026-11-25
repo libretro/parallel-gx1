@@ -100,9 +100,11 @@ public:
     No = false,
   };
 
-  std::vector<ES::Content>
-  GetStoredContentsFromTMD(const ES::TMDReader& tmd,
-                           CheckContentHashes check_content_hashes = CheckContentHashes::No) const;
+  // Whether the content's file is installed (and, when checked, matches its hash)
+  bool IsContentStored(const ES::TMDReader& tmd, const ES::Content& content,
+                       CheckContentHashes check_content_hashes = CheckContentHashes::No) const;
+  u16 GetStoredContentsCount(const ES::TMDReader& tmd, CheckContentHashes check_content_hashes =
+                                                           CheckContentHashes::No) const;
   u32 GetSharedContentsCount() const;
   std::vector<ES::Sha1Hash> GetSharedContents() const;
 

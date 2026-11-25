@@ -498,10 +498,12 @@ IPCReply ESDevice::ImportContentEnd(Context& context, const IOCtlVRequest& reque
 static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
 {
   const u64 title_id = tmd.GetTitleId();
-  const std::vector<ES::Content> contents = tmd.GetContents();
   const ES::SharedContentMap shared_content_map{ios.GetFSCore()};
-  for (const ES::Content& content : contents)
+  for (u16 i = 0; i < tmd.GetNumContents(); ++i)
   {
+    ES::Content content;
+    if (!tmd.GetContent(i, &content))
+      continue;
     if (content.IsOptional())
       continue;
 
@@ -939,10 +941,10 @@ ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
       break;
     }
 
-    const auto contents = tmd.GetContents();
-    for (const auto& content : contents)
+    for (u16 i = 0; i < tmd.GetNumContents(); ++i)
     {
-      if (!std::memcmp(content.sha1, sha1, sizeof(content.sha1)))
+      ES::Content content;
+      if (tmd.GetContent(i, &content) && !std::memcmp(content.sha1, sha1, sizeof(content.sha1)))
       {
         is_used_by_system_title = true;
         break;

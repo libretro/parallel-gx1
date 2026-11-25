@@ -102,8 +102,11 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
 
   bool contents_imported = true;
   const u64 title_id = tmd.GetTitleId();
-  for (const IOS::ES::Content& content : tmd.GetContents())
+  for (u16 i = 0; i < tmd.GetNumContents(); ++i)
   {
+    IOS::ES::Content content;
+    if (!tmd.GetContent(i, &content))
+      continue;
     const std::vector<u8> data = wad.GetContent(content.index);
 
     if (es.ImportContentBegin(context, title_id, content.id) < 0 ||
@@ -146,9 +149,8 @@ bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType
   const u64 title_id = wad.GetTMD().GetTitleId();
 
   // Skip the install if the WAD is already installed.
-  const auto installed_contents = ios.GetESCore().GetStoredContentsFromTMD(
-      wad.GetTMD(), IOS::HLE::ESCore::CheckContentHashes::Yes);
-  if (wad.GetTMD().GetContents() == installed_contents)
+  if (ios.GetESCore().GetStoredContentsCount(
+          wad.GetTMD(), IOS::HLE::ESCore::CheckContentHashes::Yes) == wad.GetTMD().GetNumContents())
   {
     // Clear the "temporary title ID" flag in case the user tries to permanently install a title
     // that has already been imported as a temporary title.

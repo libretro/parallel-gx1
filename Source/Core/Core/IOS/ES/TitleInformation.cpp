@@ -21,7 +21,7 @@ IPCReply ESDevice::GetStoredContentsCount(const ES::TMDReader& tmd, const IOCtlV
   if (request.io_vectors[0].size != sizeof(u32) || !tmd.IsValid())
     return IPCReply(ES_EINVAL);
 
-  const u16 num_contents = static_cast<u16>(m_core.GetStoredContentsFromTMD(tmd).size());
+  const u16 num_contents = m_core.GetStoredContentsCount(tmd);
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
   memory.Write_U32(num_contents, request.io_vectors[0].address);
@@ -46,12 +46,16 @@ IPCReply ESDevice::GetStoredContents(const ES::TMDReader& tmd, const IOCtlVReque
     return IPCReply(ES_EINVAL);
   }
 
-  const auto contents = m_core.GetStoredContentsFromTMD(tmd);
   const u32 max_content_count = memory.Read_U32(request.in_vectors[1].address);
-  const u32 stored_count = static_cast<u32>(contents.size());
-  const u32 count = stored_count < max_content_count ? stored_count : max_content_count;
-  for (u32 i = 0; i < count; ++i)
-    memory.Write_U32(contents[i].id, request.io_vectors[0].address + i * sizeof(u32));
+  u32 count = 0;
+  for (u16 i = 0; i < tmd.GetNumContents() && count < max_content_count; ++i)
+  {
+    ES::Content content;
+    if (!tmd.GetContent(i, &content) || !m_core.IsContentStored(tmd, content))
+      continue;
+    memory.Write_U32(content.id, request.io_vectors[0].address + count * sizeof(u32));
+    ++count;
+  }
 
   return IPCReply(IPC_SUCCESS);
 }

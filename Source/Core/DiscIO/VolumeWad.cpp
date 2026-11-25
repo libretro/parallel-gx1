@@ -145,8 +145,11 @@ const std::vector<u8>& VolumeWAD::GetCertificateChain(const Partition& partition
 std::vector<u8> VolumeWAD::GetContent(u16 index) const
 {
   u64 offset = m_data_offset;
-  for (const IOS::ES::Content& content : m_tmd.GetContents())
+  for (u16 i = 0; i < m_tmd.GetNumContents(); ++i)
   {
+    IOS::ES::Content content;
+    if (!m_tmd.GetContent(i, &content))
+      break;
     const u64 aligned_size = Common::AlignUp(content.size, 0x40);
     if (content.index == index)
     {
@@ -217,17 +220,18 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
     return m_ticket;
   }
 
-  const std::vector<IOS::ES::Content> contents = m_tmd.GetContents();
-  if (contents.empty())
-    return m_ticket;
-
   // Find the smallest content so that we spend as little time as possible in CheckContentIntegrity
-  IOS::ES::Content smallest_content = contents[0];
+  IOS::ES::Content smallest_content;
+  if (!m_tmd.IsValid() || m_tmd.GetNumContents() == 0 || !m_tmd.GetContent(0, &smallest_content))
+    return m_ticket;
   u64 offset_of_smallest_content = m_data_offset;
 
   u64 offset = m_data_offset;
-  for (const IOS::ES::Content& content : contents)
+  for (u16 i = 0; i < m_tmd.GetNumContents(); ++i)
   {
+    IOS::ES::Content content;
+    if (!m_tmd.GetContent(i, &content))
+      break;
     if (content.size < smallest_content.size)
     {
       smallest_content = content;

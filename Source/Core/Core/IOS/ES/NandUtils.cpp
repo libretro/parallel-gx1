@@ -187,61 +187,59 @@ std::vector<u64> ESCore::GetTitlesWithTickets() const
   return title_ids;
 }
 
-std::vector<ES::Content>
-ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
-                                 CheckContentHashes check_content_hashes) const
+u16 ESCore::GetStoredContentsCount(const ES::TMDReader& tmd,
+                                   CheckContentHashes check_content_hashes) const
 {
   if (!tmd.IsValid())
-    return {};
-
-  const std::vector<ES::Content> contents = tmd.GetContents();
-
-  std::vector<ES::Content> stored_contents;
-
-  const auto fs = m_ios.GetFS();
-  for (const ES::Content& content : contents)
+    return 0;
+  u16 count = 0;
+  for (u16 i = 0; i < tmd.GetNumContents(); ++i)
   {
-    char path[64];
-    if (!GetContentPath(tmd.GetTitleId(), content, path, sizeof(path)))
-      continue;
-
-    // Check whether the content file exists.
-    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
-    if (!file.has_value())
-      continue;
-
-    // If content hash checks are disabled, all we have to do is check for existence.
-    if (check_content_hashes == CheckContentHashes::No)
-    {
-      stored_contents.push_back(content);
-      continue;
-    }
-
-    // Otherwise, check whether the installed content SHA1 matches the expected hash, hashing
-    // the content in chunks rather than reading it whole.
-    struct sha1_state sha1;
-    u8 digest[20];
-    u8 chunk[2048];
-    sha1_stream_init(&sha1);
-    u32 left = file->GetStatus()->size;
-    bool ok = true;
-    while (left)
-    {
-      const u32 n = left < sizeof(chunk) ? left : u32(sizeof(chunk));
-      if (!file->Read(chunk, n))
-      {
-        ok = false;
-        break;
-      }
-      sha1_stream_update(&sha1, chunk, n);
-      left -= n;
-    }
-    if (ok && sha1_stream_final(&sha1, digest) &&
-        !std::memcmp(digest, content.sha1, sizeof(digest)))
-      stored_contents.push_back(content);
+    ES::Content content;
+    if (tmd.GetContent(i, &content) && IsContentStored(tmd, content, check_content_hashes))
+      ++count;
   }
+  return count;
+}
 
-  return stored_contents;
+bool ESCore::IsContentStored(const ES::TMDReader& tmd, const ES::Content& content,
+                             CheckContentHashes check_content_hashes) const
+{
+  const auto fs = m_ios.GetFS();
+  char path[64];
+  if (!GetContentPath(tmd.GetTitleId(), content, path, sizeof(path)))
+    return false;
+
+  // Check whether the content file exists.
+  const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
+  if (!file.has_value())
+    return false;
+
+  // If content hash checks are disabled, all we have to do is check for existence.
+  if (check_content_hashes == CheckContentHashes::No)
+    return true;
+
+  // Otherwise, check whether the installed content SHA1 matches the expected hash, hashing
+  // the content in chunks rather than reading it whole.
+  struct sha1_state sha1;
+  u8 digest[20];
+  u8 chunk[2048];
+  sha1_stream_init(&sha1);
+  u32 left = file->GetStatus()->size;
+  bool ok = true;
+  while (left)
+  {
+    const u32 n = left < sizeof(chunk) ? left : u32(sizeof(chunk));
+    if (!file->Read(chunk, n))
+    {
+      ok = false;
+      break;
+    }
+    sha1_stream_update(&sha1, chunk, n);
+    left -= n;
+  }
+  return ok && sha1_stream_final(&sha1, digest) &&
+         !std::memcmp(digest, content.sha1, sizeof(digest));
 }
 
 u32 ESCore::GetSharedContentsCount() const
@@ -358,12 +356,15 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
 }
 
 // Whether an import's content directory keeps name: the TMD or one of its contents
-static bool IsExpectedImportEntry(const char* name, const std::vector<ES::Content>& contents)
+static bool IsExpectedImportEntry(const char* name, const ES::TMDReader& tmd)
 {
   if (!std::strcmp(name, "title.tmd"))
     return true;
-  for (const ES::Content& content : contents)
+  for (u16 i = 0; i < tmd.GetNumContents(); ++i)
   {
+    ES::Content content;
+    if (!tmd.GetContent(i, &content))
+      continue;
     char content_name[16];
     std::snprintf(content_name, sizeof(content_name), "%08x.app", content.id);
     if (!std::strcmp(name, content_name))
@@ -379,7 +380,6 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   const std::string import_content_dir = Common::GetImportTitlePath(title_id) + "/content";
 
   // Remove everything not listed in the TMD.
-  const std::vector<ES::Content> contents = tmd.GetContents();
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir);
   if (!entries)
     return false;
@@ -390,7 +390,7 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
     // There should not be any directory in there. Remove it.
     if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, absolute_path))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
-    else if (!IsExpectedImportEntry(name.c_str(), contents))
+    else if (!IsExpectedImportEntry(name.c_str(), tmd))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
   }
 

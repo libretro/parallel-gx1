@@ -390,6 +390,9 @@ std::string TMDReader::GetGameTDBID() const
 
 u16 TMDReader::GetNumContents() const
 {
+  // A TMD too small for its header (or none at all) has no contents
+  if (m_size < sizeof(TMDHeader))
+    return 0;
   return Common::swap16(m_bytes + offsetof(TMDHeader, num_contents));
 }
 
@@ -408,14 +411,6 @@ bool TMDReader::GetContent(u16 index, Content* content) const
   std::memcpy(content->sha1, content_base + offsetof(Content, sha1), sizeof(content->sha1));
 
   return true;
-}
-
-std::vector<Content> TMDReader::GetContents() const
-{
-  std::vector<Content> contents(IsValid() ? GetNumContents() : 0);
-  for (size_t i = 0; i < contents.size(); ++i)
-    GetContent(static_cast<u16>(i), &contents[i]);
-  return contents;
 }
 
 bool TMDReader::FindContentById(u32 id, Content* content) const
