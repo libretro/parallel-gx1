@@ -11,7 +11,6 @@
 #include <dxgi1_6.h>
 #include <queue>
 #include <retro_miscellaneous.h>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/DynamicLibrary.h"
@@ -44,12 +43,12 @@ DXContext::~DXContext()
   }
 }
 
-std::vector<u32> DXContext::GetAAModes()
+u64 DXContext::GetAAModes()
 {
   ID3D12Device* const device = m_device.Get();
   const DXGI_FORMAT target_format =
       D3DCommon::GetDXGIFormatForAbstractFormat(FramebufferManager::GetEFBColorFormat(), false);
-  std::vector<u32> aa_modes;
+  u64 aa_modes = 0;
   for (u32 samples = 1; samples < D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT; ++samples)
   {
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS multisample_quality_levels = {};
@@ -60,7 +59,7 @@ std::vector<u32> DXContext::GetAAModes()
                                 &multisample_quality_levels, sizeof(multisample_quality_levels));
 
     if (multisample_quality_levels.NumQualityLevels > 0)
-      aa_modes.push_back(samples);
+      aa_modes |= AAModeBit(samples);
   }
 
   return aa_modes;

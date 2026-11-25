@@ -469,32 +469,31 @@ void VulkanContext::PopulateBackendInfoMultisampleModes(BackendInfo* backend_inf
       efb_color_properties.sampleCounts & efb_depth_properties.sampleCounts;
 
   // No AA
-  backend_info->AAModes.clear();
-  backend_info->AAModes.emplace_back(1);
+  backend_info->AAModes = AAModeBit(1);
 
   // 2xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_2_BIT)
-    backend_info->AAModes.emplace_back(2);
+    backend_info->AAModes |= AAModeBit(2);
 
   // 4xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_4_BIT)
-    backend_info->AAModes.emplace_back(4);
+    backend_info->AAModes |= AAModeBit(4);
 
   // 8xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_8_BIT)
-    backend_info->AAModes.emplace_back(8);
+    backend_info->AAModes |= AAModeBit(8);
 
   // 16xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_16_BIT)
-    backend_info->AAModes.emplace_back(16);
+    backend_info->AAModes |= AAModeBit(16);
 
   // 32xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_32_BIT)
-    backend_info->AAModes.emplace_back(32);
+    backend_info->AAModes |= AAModeBit(32);
 
   // 64xMSAA/SSAA
   if (supported_sample_counts & VK_SAMPLE_COUNT_64_BIT)
-    backend_info->AAModes.emplace_back(64);
+    backend_info->AAModes |= AAModeBit(64);
 }
 
 VulkanContext* VulkanContext::Create(VkInstance instance, VkPhysicalDevice gpu,

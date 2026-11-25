@@ -49,16 +49,16 @@ void Destroy()
     NOTICE_LOG(VIDEO, "Successfully released all device references!");
 }
 
-std::vector<u32> GetAAModes()
+u64 GetAAModes()
 {
   // NOTE: D3D 10.0 doesn't support multisampled resources which are bound as depth buffers AND
   // shader resources. Thus, we can't have MSAA with 10.0 level hardware.
   if (feature_level == D3D_FEATURE_LEVEL_10_0)
-    return {};
+    return 0;
 
   const DXGI_FORMAT target_format =
       D3DCommon::GetDXGIFormatForAbstractFormat(FramebufferManager::GetEFBColorFormat(), false);
-  std::vector<u32> aa_modes;
+  u64 aa_modes = 0;
   for (u32 samples = 1; samples <= D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT; ++samples)
   {
     UINT quality_levels = 0;
@@ -66,7 +66,7 @@ std::vector<u32> GetAAModes()
             device->CheckMultisampleQualityLevels(target_format, samples, &quality_levels)) &&
         quality_levels > 0)
     {
-      aa_modes.push_back(samples);
+      aa_modes |= AAModeBit(samples);
     }
   }
 

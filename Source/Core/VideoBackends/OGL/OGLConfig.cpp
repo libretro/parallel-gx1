@@ -6,10 +6,8 @@
 #include <retro_miscellaneous.h>
 
 #include <cstdio>
-#include <ranges>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/GL/GLContext.h"
@@ -34,11 +32,11 @@ namespace
 struct AAModesText
 {
   char text[128];
-  explicit AAModesText(const std::vector<int>& modes)
+  AAModesText(const GLint* modes, size_t count)
   {
     size_t len = 0;
     text[0] = '\0';
-    for (size_t i = 0; i < modes.size() && len < sizeof(text); i++)
+    for (size_t i = 0; i < count && len < sizeof(text); i++)
     {
       const int n = snprintf(text + len, sizeof(text) - len, i ? ", %d" : "%d", modes[i]);
       if (n < 0)
@@ -606,7 +604,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_backend_info.bSupportsEarlyZ =
       g_ogl_config.bSupportsImageLoadStore || g_ogl_config.bSupportsConservativeDepth;
 
-  g_backend_info.AAModes.clear();
+  g_backend_info.AAModes = 0;
   if (g_ogl_config.bSupportsMSAA)
   {
     bool supportsGetInternalFormat =
@@ -616,7 +614,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       // Note: GL_TEXTURE_2D_MULTISAMPLE_ARRAY_OES should technically be used for
       // GL_OES_texture_storage_multisample_2d_array, but both are 0x9102 so it does not matter.
 
-      std::vector<int> color_aa_modes;
+      // The sample counts, in descending order; 1 is supported whether listed or not
+      u64 color_aa_modes = AAModeBit(1);
       {
         GLenum colorInternalFormat = OGLTexture::GetGLInternalFormatForTextureFormat(
             FramebufferManager::GetEFBColorFormat(), true);
@@ -627,25 +626,28 @@ bool PopulateConfig(GLContext* m_main_gl_context)
         ASSERT_MSG(VIDEO, num_color_sample_counts >= 0,
                    "negative GL_NUM_SAMPLE_COUNTS for colors does not make sense: %d",
                    num_color_sample_counts);
-        color_aa_modes.reserve(num_color_sample_counts + 1);
         if (num_color_sample_counts > 0)
         {
-          color_aa_modes.resize(num_color_sample_counts);
-
-          static_assert(sizeof(GLint) == sizeof(u32));
+          GLint samples[32];
+          const GLsizei count = num_color_sample_counts < GLint(ARRAY_SIZE(samples)) ?
+                                    num_color_sample_counts :
+                                    GLsizei(ARRAY_SIZE(samples));
           glGetInternalformativ(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, colorInternalFormat, GL_SAMPLES,
-                                num_color_sample_counts,
-                                reinterpret_cast<GLint*>(color_aa_modes.data()));
-          ASSERT_MSG(VIDEO, std::ranges::is_sorted(color_aa_modes | std::views::reverse),
-                     "GPU driver didn't return sorted color AA modes: [%s]",
-                     AAModesText(color_aa_modes).text);
+                                count, samples);
+          bool sorted = true;
+          for (GLsizei i = 0; i < count; i++)
+          {
+            sorted = sorted && (i == 0 || samples[i] <= samples[i - 1]);
+            if (samples[i] > 0)
+              color_aa_modes |= AAModeBit(static_cast<u32>(samples[i]));
+          }
+          ASSERT_MSG(VIDEO, sorted, "GPU driver didn't return sorted color AA modes: [%s]",
+                     AAModesText(samples, count).text);
         }
-
-        if (color_aa_modes.empty() || color_aa_modes.back() != 1)
-          color_aa_modes.push_back(1);
       }
 
-      std::vector<int> depth_aa_modes;
+      // The sample counts, in descending order; 1 is supported whether listed or not
+      u64 depth_aa_modes = AAModeBit(1);
       {
         GLenum depthInternalFormat = OGLTexture::GetGLInternalFormatForTextureFormat(
             FramebufferManager::GetEFBColorFormat(), true);
@@ -656,35 +658,33 @@ bool PopulateConfig(GLContext* m_main_gl_context)
         ASSERT_MSG(VIDEO, num_depth_sample_counts >= 0,
                    "negative GL_NUM_SAMPLE_COUNTS for depth does not make sense: %d",
                    num_depth_sample_counts);
-        depth_aa_modes.reserve(num_depth_sample_counts + 1);
         if (num_depth_sample_counts > 0)
         {
-          depth_aa_modes.resize(num_depth_sample_counts);
-
-          static_assert(sizeof(GLint) == sizeof(u32));
+          GLint samples[32];
+          const GLsizei count = num_depth_sample_counts < GLint(ARRAY_SIZE(samples)) ?
+                                    num_depth_sample_counts :
+                                    GLsizei(ARRAY_SIZE(samples));
           glGetInternalformativ(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, depthInternalFormat, GL_SAMPLES,
-                                num_depth_sample_counts,
-                                reinterpret_cast<GLint*>(depth_aa_modes.data()));
-          ASSERT_MSG(VIDEO, std::ranges::is_sorted(depth_aa_modes | std::views::reverse),
-                     "GPU driver didn't return sorted depth AA modes: [%s]",
-                     AAModesText(depth_aa_modes).text);
+                                count, samples);
+          bool sorted = true;
+          for (GLsizei i = 0; i < count; i++)
+          {
+            sorted = sorted && (i == 0 || samples[i] <= samples[i - 1]);
+            if (samples[i] > 0)
+              depth_aa_modes |= AAModeBit(static_cast<u32>(samples[i]));
+          }
+          ASSERT_MSG(VIDEO, sorted, "GPU driver didn't return sorted depth AA modes: [%s]",
+                     AAModesText(samples, count).text);
         }
-
-        if (depth_aa_modes.empty() || depth_aa_modes.back() != 1)
-          depth_aa_modes.push_back(1);
       }
 
       // The spec says supported sample formats are returned in descending numeric order.
       // It also says "Only positive values are returned", but does not specify whether 1 is
       // included or not; it seems like NVIDIA and Intel GPUs do not include it.
       // We've inserted 1 at the back of both if not present to handle this.
-      g_backend_info.AAModes.clear();
-      g_backend_info.AAModes.reserve(MIN(color_aa_modes.size(), depth_aa_modes.size()));
       // We only want AA modes that are supported for both the color and depth textures. Probably
-      // the support is the same, though. views::reverse is used to swap the order ahead of time.
-      std::ranges::set_intersection(color_aa_modes | std::views::reverse,
-                                    depth_aa_modes | std::views::reverse,
-                                    std::back_inserter(g_backend_info.AAModes));
+      // the support is the same, though.
+      g_backend_info.AAModes = color_aa_modes & depth_aa_modes;
     }
     else
     {
@@ -706,17 +706,15 @@ bool PopulateConfig(GLContext* m_main_gl_context)
 
       while (supported_max_samples > 1)
       {
-        g_backend_info.AAModes.push_back(supported_max_samples);
+        g_backend_info.AAModes |= AAModeBit(supported_max_samples);
         supported_max_samples /= 2;
       }
-      g_backend_info.AAModes.push_back(1);
-      // The UI wants ascending order
-      std::ranges::reverse(g_backend_info.AAModes);
+      g_backend_info.AAModes |= AAModeBit(1);
     }
   }
   else
   {
-    g_backend_info.AAModes = {1};
+    g_backend_info.AAModes = AAModeBit(1);
   }
 
   const bool bSupportsIsHelperInvocation = g_ogl_config.bIsES ?

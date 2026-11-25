@@ -99,6 +99,12 @@ enum ConfigChangeBits : u32
   CONFIG_CHANGE_BIT_HDR = (1 << 10),
 };
 
+// The AAModes bit for a sample count, or 0 for one past 64
+constexpr u64 AAModeBit(u32 samples)
+{
+  return samples >= 1 && samples <= 64 ? u64(1) << (samples - 1) : 0;
+}
+
 // Static config per API
 struct BackendInfo
 {
@@ -106,7 +112,8 @@ struct BackendInfo
   std::string DisplayName;
 
   std::vector<std::string> Adapters;  // for D3D
-  std::vector<u32> AAModes;
+  // Bit n - 1 is set when n samples are supported, for n from 1 to 64
+  u64 AAModes = 0;
 
   // TODO: merge AdapterName and Adapters array
   std::string AdapterName;  // for OpenGL

@@ -65,7 +65,7 @@ void VideoSoftware::InitBackendInfo()
   g_backend_info.bSupportsDynamicVertexLoader = false;
 
   // aamodes
-  g_backend_info.AAModes = {1};
+  g_backend_info.AAModes = AAModeBit(1);
 }
 
 bool VideoSoftware::Initialize(float backbuffer_scale)

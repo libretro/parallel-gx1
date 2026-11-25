@@ -5,7 +5,6 @@
 
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
-#include <vector>
 #include <wrl/client.h>
 
 #include "Common/CommonTypes.h"
@@ -25,7 +24,7 @@ extern D3D_FEATURE_LEVEL feature_level;
 void Destroy();
 
 // The AA modes the frontend's device supports.
-std::vector<u32> GetAAModes();
+u64 GetAAModes();
 
 // Checks for support of the given texture format.
 bool SupportsTextureFormat(DXGI_FORMAT format);

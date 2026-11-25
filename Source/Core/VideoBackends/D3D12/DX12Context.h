@@ -52,7 +52,7 @@ public:
 
   // Returns a list of AA modes.
   // The AA modes the frontend's device supports.
-  std::vector<u32> GetAAModes();
+  u64 GetAAModes();
 
   // Destroys active context.
   static void Destroy();

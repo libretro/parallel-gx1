@@ -154,7 +154,7 @@ bool VideoBackend::FillBackendInfo(GLContext* context)
   g_backend_info.Adapters.clear();
 
   // aamodes - 1 is to stay consistent with D3D (means no AA)
-  g_backend_info.AAModes = {1, 2, 4, 8};
+  g_backend_info.AAModes = AAModeBit(1) | AAModeBit(2) | AAModeBit(4) | AAModeBit(8);
 
   // check for the max vertex attributes
   GLint numvertexattribs = 0;

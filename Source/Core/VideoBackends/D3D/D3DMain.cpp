@@ -91,7 +91,7 @@ void VideoBackend::FillBackendInfo()
   if (D3D::device)
     g_backend_info.AAModes = D3D::GetAAModes();
   else
-    g_backend_info.AAModes = {1, 2, 4, 8};
+    g_backend_info.AAModes = AAModeBit(1) | AAModeBit(2) | AAModeBit(4) | AAModeBit(8);
 
   // Override optional features if we are actually booting.
   if (D3D::device)

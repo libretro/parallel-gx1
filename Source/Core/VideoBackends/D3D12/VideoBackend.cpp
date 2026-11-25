@@ -79,7 +79,7 @@ void VideoBackend::FillBackendInfo()
   if (g_dx_context)
     g_backend_info.AAModes = g_dx_context->GetAAModes();
   else
-    g_backend_info.AAModes = {1, 2, 4, 8};
+    g_backend_info.AAModes = AAModeBit(1) | AAModeBit(2) | AAModeBit(4) | AAModeBit(8);
   g_backend_info.bSupportsShaderBinaries = true;
   g_backend_info.bSupportsPipelineCacheData = true;
   g_backend_info.bSupportsCoarseDerivatives = true;
