@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -46,17 +45,15 @@ private:
   bool IsGood() const { return m_good; }
   struct FileEntry
   {
-    FileEntry(File::DirectIOFile file_, u64 base_address_, u64 size_)
-        : file(std::move(file_)), base_address(base_address_), size(size_)
-    {
-    }
-
     File::DirectIOFile file;
-    u64 base_address;
-    u64 size;
+    u64 base_address = 0;
+    u64 size = 0;
   };
 
-  std::vector<FileEntry> m_files;
+  // The .wbfs file and its .wbf1 to .wbf9 parts
+  static constexpr size_t MAX_FILES = 10;
+  FileEntry m_files[MAX_FILES];
+  size_t m_file_count = 0;
 
   u64 m_size;
 
@@ -77,7 +74,7 @@ private:
   } m_header;
 #pragma pack()
 
-  std::vector<u16> m_wlba_table;
+  u16* m_wlba_table = nullptr;  // m_blocks_per_disc entries
   u64 m_blocks_per_disc;
 
   bool m_good;

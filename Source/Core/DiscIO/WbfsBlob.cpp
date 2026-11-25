@@ -4,11 +4,11 @@
 #include "DiscIO/WbfsBlob.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
@@ -32,23 +32,28 @@ WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const std::string& path)
     OpenAdditionalFiles(path);
   if (!ReadHeader())
     return;
-  m_good = true;
 
   // Grab disc info (assume slot 0, checked in ReadHeader())
-  m_wlba_table.resize(m_blocks_per_disc);
+  m_wlba_table = static_cast<u16*>(std::calloc(m_blocks_per_disc, sizeof(u16)));
+  if (!m_wlba_table)
+    return;
+  m_good = true;
   m_files[0].file.Seek(m_hd_sector_size + WII_DISC_HEADER_SIZE /*+ i * m_disc_info_size*/,
                        File::SeekOrigin::Begin);
-  m_files[0].file.Read(reinterpret_cast<u8*>(m_wlba_table.data()), m_wlba_table.size() * sizeof(m_wlba_table[0]));
+  m_files[0].file.Read(reinterpret_cast<u8*>(m_wlba_table), m_blocks_per_disc * sizeof(u16));
   for (size_t i = 0; i < m_blocks_per_disc; i++)
     m_wlba_table[i] = Common::swap16(m_wlba_table[i]);
 }
 
-WbfsFileReader::~WbfsFileReader() = default;
+WbfsFileReader::~WbfsFileReader()
+{
+  std::free(m_wlba_table);
+}
 
 BlobReader* WbfsFileReader::CopyReader() const
 {
   WbfsFileReader* retval = new WbfsFileReader(m_files[0].file);
-  for (size_t ix = 1; ix < m_files.size(); ix++)
+  for (size_t ix = 1; ix < m_file_count; ix++)
     retval->AddFileToList(m_files[ix].file);
   return retval;
 }
@@ -63,15 +68,15 @@ void WbfsFileReader::OpenAdditionalFiles(const std::string& path)
   if (path.length() < 4)
     return;
 
-  ASSERT(!m_files.empty());  // The code below gives .wbf0 for index 0, but it should be .wbfs
+  ASSERT(m_file_count != 0);  // The code below gives .wbf0 for index 0, but it should be .wbfs
 
   while (true)
   {
     // Replace last character with index (e.g. wbfs = wbf1)
-    if (m_files.size() >= 10)
+    if (m_file_count >= MAX_FILES)
       return;
     std::string current_path = path;
-    current_path.back() = static_cast<char>('0' + m_files.size());
+    current_path.back() = static_cast<char>('0' + m_file_count);
     if (!AddFileToList(File::DirectIOFile(current_path, File::AccessMode::Read)))
       return;
   }
@@ -79,11 +84,14 @@ void WbfsFileReader::OpenAdditionalFiles(const std::string& path)
 
 bool WbfsFileReader::AddFileToList(File::DirectIOFile file)
 {
-  if (!file.IsOpen())
+  if (!file.IsOpen() || m_file_count == MAX_FILES)
     return false;
 
   const u64 file_size = file.GetSize();
-  m_files.emplace_back(std::move(file), m_size, file_size);
+  FileEntry& entry = m_files[m_file_count++];
+  entry.file = std::move(file);
+  entry.base_address = m_size;
+  entry.size = file_size;
   m_size += file_size;
 
   return true;
@@ -154,8 +162,9 @@ File::DirectIOFile& WbfsFileReader::SeekToCluster(u64 offset, u64* available)
     u64 cluster_offset = offset & (m_wbfs_sector_size - 1);
     u64 final_address = cluster_address + cluster_offset;
 
-    for (FileEntry& file_entry : m_files)
+    for (size_t f = 0; f < m_file_count; f++)
     {
+      FileEntry& file_entry = m_files[f];
       if (final_address < (file_entry.base_address + file_entry.size))
       {
         file_entry.file.Seek(final_address - file_entry.base_address, File::SeekOrigin::Begin);
