@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include <retro_atomic.h>
 
@@ -66,6 +65,14 @@ struct DeviceDescriptor
   u8 iSerialNumber;
   u8 bNumConfigurations;
 };
+
+// The most descriptors of each kind a device reports
+constexpr size_t MAX_CONFIGS = 8;
+constexpr size_t MAX_INTERFACES = 32;
+constexpr size_t MAX_ENDPOINTS = 32;
+
+// Copies up to max of count descriptors of size bytes each; returns how many it copied
+size_t CopyDescriptors(void* out, size_t max, const void* src, size_t count, size_t size);
 
 struct ConfigDescriptor
 {
@@ -183,9 +190,11 @@ public:
   bool HasClass(u8 device_class) const;
 
   virtual DeviceDescriptor GetDeviceDescriptor() const = 0;
-  virtual std::vector<ConfigDescriptor> GetConfigurations() const = 0;
-  virtual std::vector<InterfaceDescriptor> GetInterfaces(u8 config) const = 0;
-  virtual std::vector<EndpointDescriptor> GetEndpoints(u8 config, u8 iface, u8 alt) const = 0;
+  // Each fills out with up to max descriptors and returns how many it filled
+  virtual size_t GetConfigurations(ConfigDescriptor* out, size_t max) const = 0;
+  virtual size_t GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const = 0;
+  virtual size_t GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                              size_t max) const = 0;
 
   virtual std::string GetErrorName(int error_code) const;
   /// Ensure the device is ready to use.

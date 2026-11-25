@@ -5,7 +5,6 @@
 
 #if defined(__LIBUSB__)
 #include <string>
-#include <vector>
 
 #include <retro_atomic.h>
 
@@ -28,9 +27,10 @@ public:
   LibusbDevice(libusb_device* device, const libusb_device_descriptor& device_descriptor);
   ~LibusbDevice() override;
   DeviceDescriptor GetDeviceDescriptor() const override;
-  std::vector<ConfigDescriptor> GetConfigurations() const override;
-  std::vector<InterfaceDescriptor> GetInterfaces(u8 config) const override;
-  std::vector<EndpointDescriptor> GetEndpoints(u8 config, u8 iface, u8 alt) const override;
+  size_t GetConfigurations(ConfigDescriptor* out, size_t max) const override;
+  size_t GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const override;
+  size_t GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                      size_t max) const override;
   std::string GetErrorName(int error_code) const override;
   bool Attach() override;
   bool AttachAndChangeInterface(u8 iface) override;

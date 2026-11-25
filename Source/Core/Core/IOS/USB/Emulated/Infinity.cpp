@@ -137,6 +137,12 @@ static constexpr u8 SHA1_CONSTANT[32] = {
     0xAF, 0x62, 0xD2, 0xEC, 0x04, 0x91, 0x96, 0x8C, 0xC5, 0x2A, 0x1A, 0x71, 0x65, 0xF8, 0x65, 0xFE,
     0x28, 0x63, 0x29, 0x20, 0x44, 0x69, 0x73, 0x6e, 0x65, 0x79, 0x20, 0x32, 0x30, 0x31, 0x33};
 
+static const ConfigDescriptor INFINITY_CONFIGS[] = {{0x9, 0x2, 0x29, 0x1, 0x1, 0x0, 0x80, 0xFA}};
+static const InterfaceDescriptor INFINITY_INTERFACES[] = {
+    {0x9, 0x4, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0}};
+static const EndpointDescriptor INFINITY_ENDPOINTS[] = {{0x7, 0x5, 0x81, 0x3, 0x20, 0x1},
+                                                        {0x7, 0x5, 0x1, 0x3, 0x20, 0x1}};
+
 InfinityUSB::InfinityUSB()
 {
   infinity_queries_init(&m_queries, 16);
@@ -146,11 +152,6 @@ InfinityUSB::InfinityUSB()
   m_id = (u64(m_vid) << 32 | u64(m_pid) << 16 | u64(9) << 8 | u64(1));
   m_device_descriptor = DeviceDescriptor{0x12,   0x1,    0x200, 0x0, 0x0, 0x0, 0x20,
                                          0x0E6F, 0x0129, 0x200, 0x1, 0x2, 0x3, 0x1};
-  m_config_descriptor.emplace_back(ConfigDescriptor{0x9, 0x2, 0x29, 0x1, 0x1, 0x0, 0x80, 0xFA});
-  m_interface_descriptor.emplace_back(
-      InterfaceDescriptor{0x9, 0x4, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0});
-  m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x81, 0x3, 0x20, 0x1});
-  m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x1, 0x3, 0x20, 0x1});
 }
 
 InfinityUSB::~InfinityUSB()
@@ -169,19 +170,22 @@ DeviceDescriptor InfinityUSB::GetDeviceDescriptor() const
   return m_device_descriptor;
 }
 
-std::vector<ConfigDescriptor> InfinityUSB::GetConfigurations() const
+size_t InfinityUSB::GetConfigurations(ConfigDescriptor* out, size_t max) const
 {
-  return m_config_descriptor;
+  return CopyDescriptors(out, max, INFINITY_CONFIGS, ARRAY_SIZE(INFINITY_CONFIGS), sizeof(*out));
 }
 
-std::vector<InterfaceDescriptor> InfinityUSB::GetInterfaces(u8 config) const
+size_t InfinityUSB::GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const
 {
-  return m_interface_descriptor;
+  return CopyDescriptors(out, max, INFINITY_INTERFACES, ARRAY_SIZE(INFINITY_INTERFACES),
+                         sizeof(*out));
 }
 
-std::vector<EndpointDescriptor> InfinityUSB::GetEndpoints(u8 config, u8 iface, u8 alt) const
+size_t InfinityUSB::GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                                 size_t max) const
 {
-  return m_endpoint_descriptor;
+  return CopyDescriptors(out, max, INFINITY_ENDPOINTS, ARRAY_SIZE(INFINITY_ENDPOINTS),
+                         sizeof(*out));
 }
 
 bool InfinityUSB::Attach()

@@ -9,7 +9,6 @@
 #include <cstring>
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include <libusb.h>
 
@@ -85,10 +84,10 @@ DeviceDescriptor LibusbDevice::GetDeviceDescriptor() const
   return descriptor;
 }
 
-std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
+size_t LibusbDevice::GetConfigurations(ConfigDescriptor* out, size_t max) const
 {
-  std::vector<ConfigDescriptor> descriptors;
-  for (u8 i = 0; i < m_config_count; ++i)
+  size_t count = 0;
+  for (u8 i = 0; i < m_config_count && count < max; ++i)
   {
     const libusb_config_descriptor* const config_descriptor = m_config_descriptors[i];
     if (!config_descriptor)
@@ -97,56 +96,46 @@ std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
                 (unsigned)m_pid);
       continue;
     }
-    ConfigDescriptor descriptor;
-    std::memcpy(&descriptor, config_descriptor, sizeof(descriptor));
-    descriptors.push_back(descriptor);
+    std::memcpy(&out[count++], config_descriptor, sizeof(ConfigDescriptor));
   }
-  return descriptors;
+  return count;
 }
 
-std::vector<InterfaceDescriptor> LibusbDevice::GetInterfaces(const u8 config) const
+size_t LibusbDevice::GetInterfaces(const u8 config, InterfaceDescriptor* out, size_t max) const
 {
-  std::vector<InterfaceDescriptor> descriptors;
+  size_t count = 0;
   if (config >= m_config_count || !m_config_descriptors[config])
   {
     ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
               (unsigned)m_vid, (unsigned)m_pid);
-    return descriptors;
+    return 0;
   }
   for (u8 i = 0; i < m_config_descriptors[config]->bNumInterfaces; ++i)
   {
     const libusb_interface& interface = m_config_descriptors[config]->interface[i];
-    for (u8 a = 0; a < interface.num_altsetting; ++a)
-    {
-      InterfaceDescriptor descriptor;
-      std::memcpy(&descriptor, &interface.altsetting[a], sizeof(descriptor));
-      descriptors.push_back(descriptor);
-    }
+    for (u8 a = 0; a < interface.num_altsetting && count < max; ++a)
+      std::memcpy(&out[count++], &interface.altsetting[a], sizeof(InterfaceDescriptor));
   }
-  return descriptors;
+  return count;
 }
 
-std::vector<EndpointDescriptor>
-LibusbDevice::GetEndpoints(const u8 config, const u8 interface_number, const u8 alt_setting) const
+size_t LibusbDevice::GetEndpoints(const u8 config, const u8 interface_number, const u8 alt_setting,
+                                  EndpointDescriptor* out, size_t max) const
 {
-  std::vector<EndpointDescriptor> descriptors;
+  size_t count = 0;
   if (config >= m_config_count || !m_config_descriptors[config])
   {
     ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
               (unsigned)m_vid, (unsigned)m_pid);
-    return descriptors;
+    return 0;
   }
   ASSERT(interface_number < m_config_descriptors[config]->bNumInterfaces);
   const auto& interface = m_config_descriptors[config]->interface[interface_number];
   ASSERT(alt_setting < interface.num_altsetting);
   const libusb_interface_descriptor& interface_descriptor = interface.altsetting[alt_setting];
-  for (u8 i = 0; i < interface_descriptor.bNumEndpoints; ++i)
-  {
-    EndpointDescriptor descriptor;
-    std::memcpy(&descriptor, &interface_descriptor.endpoint[i], sizeof(descriptor));
-    descriptors.push_back(descriptor);
-  }
-  return descriptors;
+  for (u8 i = 0; i < interface_descriptor.bNumEndpoints && count < max; ++i)
+    std::memcpy(&out[count++], &interface_descriptor.endpoint[i], sizeof(EndpointDescriptor));
+  return count;
 }
 
 std::string LibusbDevice::GetErrorName(const int error_code) const

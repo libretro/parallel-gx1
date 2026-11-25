@@ -117,36 +117,40 @@ DeviceDescriptor LogitechMic::GetDeviceDescriptor() const
   return DEVICE_DESCRIPTOR;
 }
 
-static const std::vector<ConfigDescriptor> CONFIG_DESCRIPTOR{
-    ConfigDescriptor{0x09, 0x02, 0x0079, 0x02, 0x01, 0x03, 0x80, 0x3c},
+static const ConfigDescriptor CONFIG_DESCRIPTOR[] = {
+    {0x09, 0x02, 0x0079, 0x02, 0x01, 0x03, 0x80, 0x3c},
 };
 
-std::vector<ConfigDescriptor> LogitechMic::GetConfigurations() const
+size_t LogitechMic::GetConfigurations(ConfigDescriptor* out, size_t max) const
 {
-  return CONFIG_DESCRIPTOR;
+  return CopyDescriptors(out, max, CONFIG_DESCRIPTOR, ARRAY_SIZE(CONFIG_DESCRIPTOR), sizeof(*out));
 }
 
-static const std::vector<InterfaceDescriptor> INTERFACE_DESCRIPTORS{
-    InterfaceDescriptor{0x09, 0x04, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00},
-    InterfaceDescriptor{0x09, 0x04, 0x01, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00},
-    InterfaceDescriptor{0x09, 0x04, 0x01, 0x01, 0x01, 0x01, 0x02, 0x00, 0x00}};
+static const InterfaceDescriptor INTERFACE_DESCRIPTORS[] = {
+    {0x09, 0x04, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00},
+    {0x09, 0x04, 0x01, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00},
+    {0x09, 0x04, 0x01, 0x01, 0x01, 0x01, 0x02, 0x00, 0x00}};
 
-std::vector<InterfaceDescriptor> LogitechMic::GetInterfaces(u8 /*config*/) const
+size_t LogitechMic::GetInterfaces(u8 /*config*/, InterfaceDescriptor* out, size_t max) const
 {
-  return INTERFACE_DESCRIPTORS;
+  return CopyDescriptors(out, max, INTERFACE_DESCRIPTORS, ARRAY_SIZE(INTERFACE_DESCRIPTORS),
+                         sizeof(*out));
 }
 
 static constexpr u8 ENDPOINT_AUDIO_IN = 0x84;
-static const std::vector<EndpointDescriptor> ENDPOINT_DESCRIPTORS{
-    EndpointDescriptor{0x09, 0x05, ENDPOINT_AUDIO_IN, 0x0d, 0x0060, 0x01},
+static const EndpointDescriptor ENDPOINT_DESCRIPTORS[] = {
+    {0x09, 0x05, ENDPOINT_AUDIO_IN, 0x0d, 0x0060, 0x01},
 };
 
-std::vector<EndpointDescriptor> LogitechMic::GetEndpoints(u8 /*config*/, u8 interface, u8 alt) const
+size_t LogitechMic::GetEndpoints(u8 /*config*/, u8 interface, u8 alt, EndpointDescriptor* out,
+                                 size_t max) const
 {
   if (interface == 1 && alt == 1)
-    return ENDPOINT_DESCRIPTORS;
-
-  return std::vector<EndpointDescriptor>{};
+  {
+    return CopyDescriptors(out, max, ENDPOINT_DESCRIPTORS, ARRAY_SIZE(ENDPOINT_DESCRIPTORS),
+                           sizeof(*out));
+  }
+  return 0;
 }
 
 bool LogitechMic::Attach()

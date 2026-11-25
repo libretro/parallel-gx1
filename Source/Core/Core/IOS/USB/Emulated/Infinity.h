@@ -39,9 +39,10 @@ public:
   InfinityUSB();
   ~InfinityUSB() override;
   DeviceDescriptor GetDeviceDescriptor() const override;
-  std::vector<ConfigDescriptor> GetConfigurations() const override;
-  std::vector<InterfaceDescriptor> GetInterfaces(u8 config) const override;
-  std::vector<EndpointDescriptor> GetEndpoints(u8 config, u8 iface, u8 alt) const override;
+  size_t GetConfigurations(ConfigDescriptor* out, size_t max) const override;
+  size_t GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const override;
+  size_t GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                      size_t max) const override;
   bool Attach() override;
   bool AttachAndChangeInterface(u8 iface) override;
   int CancelTransfer(u8 endpoint) override;
@@ -63,9 +64,6 @@ private:
   u8 m_active_interface = 0;
   bool m_device_attached = false;
   DeviceDescriptor m_device_descriptor;
-  std::vector<ConfigDescriptor> m_config_descriptor;
-  std::vector<InterfaceDescriptor> m_interface_descriptor;
-  std::vector<EndpointDescriptor> m_endpoint_descriptor;
   // made with the base: a poll allocates nothing; the transfers waiting are owned here
   infinity_queries_t m_queries;
   infinity_waiting_t m_response_list;

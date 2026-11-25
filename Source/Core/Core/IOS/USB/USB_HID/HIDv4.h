@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/IOS.h"
@@ -34,7 +33,9 @@ private:
   s32 SubmitTransfer(USB::Device& device, const IOCtlRequest& request);
 
   void TriggerDeviceChangeReply();
-  std::vector<u8> GetDeviceEntry(const USB::Device& device) const;
+  // Builds the device's entry into out; 0 when it does not fit
+  static constexpr size_t MAX_DEVICE_ENTRY_SIZE = 2048;
+  size_t GetDeviceEntry(const USB::Device& device, u8* out, size_t capacity) const;
   void OnDeviceChange(ChangeEvent, USB::Device*) override;
   bool ShouldAddDevice(const USB::Device& device) const override;
 

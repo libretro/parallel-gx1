@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "Common/CommonTypes.h"
 #include "Core/IOS/USB/Common.h"
 #include "Core/IOS/USB/Emulated/Microphone.h"
@@ -34,9 +32,10 @@ public:
   ~LogitechMic() override;
 
   DeviceDescriptor GetDeviceDescriptor() const override;
-  std::vector<ConfigDescriptor> GetConfigurations() const override;
-  std::vector<InterfaceDescriptor> GetInterfaces(u8 config) const override;
-  std::vector<EndpointDescriptor> GetEndpoints(u8 config, u8 iface, u8 alt) const override;
+  size_t GetConfigurations(ConfigDescriptor* out, size_t max) const override;
+  size_t GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const override;
+  size_t GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                      size_t max) const override;
   bool Attach() override;
   bool AttachAndChangeInterface(u8 iface) override;
   int CancelTransfer(u8 endpoint) override;

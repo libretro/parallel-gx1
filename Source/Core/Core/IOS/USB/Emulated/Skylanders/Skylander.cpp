@@ -3,8 +3,6 @@
 
 #include "Core/IOS/USB/Emulated/Skylanders/Skylander.h"
 
-#include <vector>
-
 #include "AudioCommon/FieldAudio.h"
 #include "Common/Logging/Log.h"
 #include "Core/Core.h"
@@ -629,6 +627,12 @@ const SkyData* FindSkylander(u16 figure_id, u16 variant_id)
   return nullptr;
 }
 
+static const ConfigDescriptor SKYLANDER_CONFIGS[] = {{0x9, 0x2, 0x29, 0x1, 0x1, 0x0, 0x80, 0xFA}};
+static const InterfaceDescriptor SKYLANDER_INTERFACES[] = {
+    {0x9, 0x4, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0}};
+static const EndpointDescriptor SKYLANDER_ENDPOINTS[] = {{0x7, 0x5, 0x81, 0x3, 0x40, 0x1},
+                                                         {0x7, 0x5, 0x2, 0x3, 0x40, 0x1}};
+
 SkylanderUSB::SkylanderUSB()
 {
   skylander_queries_init(&m_queries, 16);
@@ -638,11 +642,6 @@ SkylanderUSB::SkylanderUSB()
           static_cast<u64>(1));
   m_device_descriptor = DeviceDescriptor{0x12,   0x1,   0x200, 0x0, 0x0, 0x0, 0x40,
                                          0x1430, 0x150, 0x100, 0x1, 0x2, 0x0, 0x1};
-  m_config_descriptor.emplace_back(ConfigDescriptor{0x9, 0x2, 0x29, 0x1, 0x1, 0x0, 0x80, 0xFA});
-  m_interface_descriptor.emplace_back(
-      InterfaceDescriptor{0x9, 0x4, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0});
-  m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x81, 0x3, 0x40, 0x1});
-  m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x2, 0x3, 0x40, 0x1});
 }
 
 SkylanderUSB::~SkylanderUSB()
@@ -655,19 +654,22 @@ DeviceDescriptor SkylanderUSB::GetDeviceDescriptor() const
   return m_device_descriptor;
 }
 
-std::vector<ConfigDescriptor> SkylanderUSB::GetConfigurations() const
+size_t SkylanderUSB::GetConfigurations(ConfigDescriptor* out, size_t max) const
 {
-  return m_config_descriptor;
+  return CopyDescriptors(out, max, SKYLANDER_CONFIGS, ARRAY_SIZE(SKYLANDER_CONFIGS), sizeof(*out));
 }
 
-std::vector<InterfaceDescriptor> SkylanderUSB::GetInterfaces(u8 config) const
+size_t SkylanderUSB::GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const
 {
-  return m_interface_descriptor;
+  return CopyDescriptors(out, max, SKYLANDER_INTERFACES, ARRAY_SIZE(SKYLANDER_INTERFACES),
+                         sizeof(*out));
 }
 
-std::vector<EndpointDescriptor> SkylanderUSB::GetEndpoints(u8 config, u8 iface, u8 alt) const
+size_t SkylanderUSB::GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                                  size_t max) const
 {
-  return m_endpoint_descriptor;
+  return CopyDescriptors(out, max, SKYLANDER_ENDPOINTS, ARRAY_SIZE(SKYLANDER_ENDPOINTS),
+                         sizeof(*out));
 }
 
 bool SkylanderUSB::Attach()

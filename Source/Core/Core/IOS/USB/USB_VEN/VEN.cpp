@@ -136,22 +136,33 @@ IPCReply USB_VEN::GetDeviceInfo(USBV5Device& device, const IOCtlRequest& request
   memory.CopyToEmu(request.buffer_out + 20, &device_descriptor, sizeof(device_descriptor));
 
   // VEN only cares about the first configuration.
-  USB::ConfigDescriptor config_descriptor = host_device->GetConfigurations()[0];
+  USB::ConfigDescriptor config_descriptor;
+  if (host_device->GetConfigurations(&config_descriptor, 1) == 0)
+    return IPCReply(IPC_EINVAL);
   config_descriptor.Swap();
   memory.CopyToEmu(request.buffer_out + 40, &config_descriptor, sizeof(config_descriptor));
 
-  std::vector<USB::InterfaceDescriptor> interfaces = host_device->GetInterfaces(0);
-  auto it = std::ranges::find_if(interfaces, [&](const USB::InterfaceDescriptor& interface) {
-    return interface.bInterfaceNumber == device.interface_number &&
-           interface.bAlternateSetting == alt_setting;
-  });
-  if (it == interfaces.end())
+  USB::InterfaceDescriptor interfaces[USB::MAX_INTERFACES];
+  const size_t interface_count = host_device->GetInterfaces(0, interfaces, USB::MAX_INTERFACES);
+  USB::InterfaceDescriptor* it = nullptr;
+  for (size_t i = 0; i < interface_count; i++)
+  {
+    if (interfaces[i].bInterfaceNumber == device.interface_number &&
+        interfaces[i].bAlternateSetting == alt_setting)
+    {
+      it = &interfaces[i];
+      break;
+    }
+  }
+  if (!it)
     return IPCReply(IPC_EINVAL);
   it->Swap();
-  memory.CopyToEmu(request.buffer_out + 52, &*it, sizeof(*it));
+  memory.CopyToEmu(request.buffer_out + 52, it, sizeof(*it));
 
-  auto endpoints = host_device->GetEndpoints(0, it->bInterfaceNumber, it->bAlternateSetting);
-  for (size_t i = 0; i < endpoints.size(); ++i)
+  USB::EndpointDescriptor endpoints[USB::MAX_ENDPOINTS];
+  const size_t endpoint_count = host_device->GetEndpoints(
+      0, it->bInterfaceNumber, it->bAlternateSetting, endpoints, USB::MAX_ENDPOINTS);
+  for (size_t i = 0; i < endpoint_count; ++i)
   {
     endpoints[i].Swap();
     memory.CopyToEmu(request.buffer_out + 64 + 8 * static_cast<u8>(i), &endpoints[i],

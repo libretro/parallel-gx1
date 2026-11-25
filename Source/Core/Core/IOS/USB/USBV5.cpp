@@ -209,8 +209,11 @@ void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event, USB::Device* 
   const u64 host_device_id = device->GetId();
   if (event == ChangeEvent::Inserted)
   {
-    for (const auto& interface : device->GetInterfaces(0))
+    USB::InterfaceDescriptor interfaces[USB::MAX_INTERFACES];
+    const size_t interface_count = device->GetInterfaces(0, interfaces, USB::MAX_INTERFACES);
+    for (size_t n = 0; n < interface_count; n++)
     {
+      const USB::InterfaceDescriptor& interface = interfaces[n];
       if (interface.bAlternateSetting != 0)
         continue;
 

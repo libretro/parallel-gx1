@@ -158,23 +158,35 @@ IPCReply USB_HIDv5::GetDeviceInfo(USBV5Device& device, const IOCtlRequest& reque
   memory.CopyToEmu(request.buffer_out + 36, &device_descriptor, sizeof(device_descriptor));
 
   // Just like VEN, HIDv5 only cares about the first configuration.
-  USB::ConfigDescriptor config_descriptor = host_device->GetConfigurations()[0];
+  USB::ConfigDescriptor config_descriptor;
+  if (host_device->GetConfigurations(&config_descriptor, 1) == 0)
+    return IPCReply(IPC_EINVAL);
   config_descriptor.Swap();
   memory.CopyToEmu(request.buffer_out + 56, &config_descriptor, sizeof(config_descriptor));
 
-  std::vector<USB::InterfaceDescriptor> interfaces = host_device->GetInterfaces(0);
-  auto it = std::ranges::find_if(interfaces, [&](const USB::InterfaceDescriptor& interface) {
-    return interface.bInterfaceNumber == device.interface_number &&
-           interface.bAlternateSetting == alt_setting;
-  });
-  if (it == interfaces.end())
+  USB::InterfaceDescriptor interfaces[USB::MAX_INTERFACES];
+  const size_t interface_count = host_device->GetInterfaces(0, interfaces, USB::MAX_INTERFACES);
+  USB::InterfaceDescriptor* it = nullptr;
+  for (size_t i = 0; i < interface_count; i++)
+  {
+    if (interfaces[i].bInterfaceNumber == device.interface_number &&
+        interfaces[i].bAlternateSetting == alt_setting)
+    {
+      it = &interfaces[i];
+      break;
+    }
+  }
+  if (!it)
     return IPCReply(IPC_EINVAL);
   it->Swap();
-  memory.CopyToEmu(request.buffer_out + 68, &*it, sizeof(*it));
+  memory.CopyToEmu(request.buffer_out + 68, it, sizeof(*it));
 
-  auto endpoints = host_device->GetEndpoints(0, it->bInterfaceNumber, it->bAlternateSetting);
-  for (auto& endpoint : endpoints)
+  USB::EndpointDescriptor endpoints[USB::MAX_ENDPOINTS];
+  const size_t endpoint_count = host_device->GetEndpoints(
+      0, it->bInterfaceNumber, it->bAlternateSetting, endpoints, USB::MAX_ENDPOINTS);
+  for (size_t e = 0; e < endpoint_count; e++)
   {
+    USB::EndpointDescriptor& endpoint = endpoints[e];
     constexpr u8 ENDPOINT_INTERRUPT = 0b11;
     constexpr u8 ENDPOINT_IN = 0x80;
     if (endpoint.bmAttributes == ENDPOINT_INTERRUPT)

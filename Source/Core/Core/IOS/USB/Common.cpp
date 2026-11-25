@@ -6,6 +6,7 @@
 #include <algorithm>
 
 #include <cstdio>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -16,6 +17,15 @@
 
 namespace IOS::HLE::USB
 {
+size_t CopyDescriptors(void* out, size_t max, const void* src, size_t count, size_t size)
+{
+  if (count > max)
+    count = max;
+  if (count)
+    std::memcpy(out, src, count * size);
+  return count;
+}
+
 EmulationKernel& TransferCommand::GetEmulationKernel() const
 {
   return m_ios;
@@ -109,10 +119,14 @@ bool Device::HasClass(const u8 device_class) const
 {
   if (GetDeviceDescriptor().bDeviceClass == device_class)
     return true;
-  const auto interfaces = GetInterfaces(0);
-  return std::ranges::any_of(interfaces, [device_class](const auto& interface) {
-    return interface.bInterfaceClass == device_class;
-  });
+  InterfaceDescriptor interfaces[MAX_INTERFACES];
+  const size_t count = GetInterfaces(0, interfaces, MAX_INTERFACES);
+  for (size_t i = 0; i < count; i++)
+  {
+    if (interfaces[i].bInterfaceClass == device_class)
+      return true;
+  }
+  return false;
 }
 
 void DeviceDescriptor::Swap()

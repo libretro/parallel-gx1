@@ -6,7 +6,6 @@
 #include <cstring>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "Common/Align.h"
 #include "Common/ChunkFile.h"
@@ -272,14 +271,16 @@ void USB_HIDv4::TriggerDeviceChangeReply()
     u32 offset = 0;
     for (u32 i = 0; i < m_devices.count; i++)
     {
-      const std::vector<u8> device_section = GetDeviceEntry(*m_devices.devices[i]);
-      if (offset + device_section.size() > hook.buffer_out_size - 1)
+      u8 device_section[MAX_DEVICE_ENTRY_SIZE];
+      const size_t section_size =
+          GetDeviceEntry(*m_devices.devices[i], device_section, sizeof(device_section));
+      if (section_size == 0 || offset + section_size > hook.buffer_out_size - 1)
       {
         WARN_LOG(IOS_USB, "Too many devices connected, skipping");
         break;
       }
-      memory.CopyToEmu(dest + offset, device_section.data(), device_section.size());
-      offset += Common::AlignUp(static_cast<u32>(device_section.size()), 4);
+      memory.CopyToEmu(dest + offset, device_section, section_size);
+      offset += Common::AlignUp(static_cast<u32>(section_size), 4);
     }
     // IOS writes 0xffffffff to the buffer when there are no more devices
     memory.Write_U32(0xffffffff, dest + offset);
@@ -289,56 +290,67 @@ void USB_HIDv4::TriggerDeviceChangeReply()
   m_devicechange_hook_address = 0;
 }
 
-template <typename T>
-static void CopyDescriptorToBuffer(std::vector<u8>* buffer, T descriptor)
+// Appends an already swapped descriptor padded to 4 bytes; false when it does not fit
+static bool AppendDescriptor(u8* out, size_t capacity, size_t* size, const void* descriptor,
+                             size_t descriptor_size)
 {
-  const size_t size = sizeof(descriptor);
-  descriptor.Swap();
-  buffer->insert(buffer->end(), reinterpret_cast<const u8*>(&descriptor),
-                 reinterpret_cast<const u8*>(&descriptor) + size);
-  constexpr size_t number_of_padding_bytes = Common::AlignUp(size, 4) - size;
-  buffer->insert(buffer->end(), number_of_padding_bytes, 0);
+  const size_t padded = Common::AlignUp(descriptor_size, 4);
+  if (*size + padded > capacity)
+    return false;
+  std::memcpy(out + *size, descriptor, descriptor_size);
+  std::memset(out + *size + descriptor_size, 0, padded - descriptor_size);
+  *size += padded;
+  return true;
 }
 
-static std::vector<u8> GetDescriptors(const USB::Device& device)
+size_t USB_HIDv4::GetDeviceEntry(const USB::Device& device, u8* out, size_t capacity) const
 {
-  std::vector<u8> buffer;
-
-  CopyDescriptorToBuffer(&buffer, device.GetDeviceDescriptor());
-  const auto configurations = device.GetConfigurations();
-  for (size_t c = 0; c < configurations.size(); ++c)
-  {
-    CopyDescriptorToBuffer(&buffer, configurations[c]);
-    const auto interfaces = device.GetInterfaces(static_cast<u8>(c));
-    for (size_t i = interfaces.size(); i-- > 0;)
-    {
-      CopyDescriptorToBuffer(&buffer, interfaces[i]);
-      for (const auto& endpoint_descriptor : device.GetEndpoints(
-               static_cast<u8>(c), interfaces[i].bInterfaceNumber, interfaces[i].bAlternateSetting))
-      {
-        CopyDescriptorToBuffer(&buffer, endpoint_descriptor);
-      }
-    }
-  }
-  return buffer;
-}
-
-std::vector<u8> USB_HIDv4::GetDeviceEntry(const USB::Device& device) const
-{
-
   // The structure for a device section is as follows:
   //   0-4 bytes: total size of the device data, including the size and the device ID
   //   4-8 bytes: device ID
   //   the rest of the buffer is device descriptors data
-  std::vector<u8> entry(8);
-  const std::vector<u8> descriptors = GetDescriptors(device);
-  const u32 entry_size = Common::swap32(static_cast<u32>(entry.size() + descriptors.size()));
+  if (capacity < 8)
+    return 0;
+  size_t size = 8;
+
+  USB::DeviceDescriptor device_descriptor = device.GetDeviceDescriptor();
+  device_descriptor.Swap();
+  if (!AppendDescriptor(out, capacity, &size, &device_descriptor, sizeof(device_descriptor)))
+    return 0;
+
+  USB::ConfigDescriptor configurations[USB::MAX_CONFIGS];
+  const size_t config_count = device.GetConfigurations(configurations, USB::MAX_CONFIGS);
+  for (size_t c = 0; c < config_count; ++c)
+  {
+    configurations[c].Swap();
+    if (!AppendDescriptor(out, capacity, &size, &configurations[c], sizeof(configurations[c])))
+      return 0;
+    USB::InterfaceDescriptor interfaces[USB::MAX_INTERFACES];
+    const size_t interface_count =
+        device.GetInterfaces(static_cast<u8>(c), interfaces, USB::MAX_INTERFACES);
+    for (size_t i = interface_count; i-- > 0;)
+    {
+      USB::EndpointDescriptor endpoints[USB::MAX_ENDPOINTS];
+      const size_t endpoint_count =
+          device.GetEndpoints(static_cast<u8>(c), interfaces[i].bInterfaceNumber,
+                              interfaces[i].bAlternateSetting, endpoints, USB::MAX_ENDPOINTS);
+      interfaces[i].Swap();
+      if (!AppendDescriptor(out, capacity, &size, &interfaces[i], sizeof(interfaces[i])))
+        return 0;
+      for (size_t e = 0; e < endpoint_count; e++)
+      {
+        endpoints[e].Swap();
+        if (!AppendDescriptor(out, capacity, &size, &endpoints[e], sizeof(endpoints[e])))
+          return 0;
+      }
+    }
+  }
+
+  const u32 entry_size = Common::swap32(static_cast<u32>(size));
   const DeviceIds* const ids = FindByDeviceId(device.GetId());
   const u32 ios_device_id = Common::swap32(static_cast<u32>(ids ? ids->ios_id : -1));
-  std::memcpy(entry.data(), &entry_size, sizeof(entry_size));
-  std::memcpy(entry.data() + 4, &ios_device_id, sizeof(ios_device_id));
-  entry.insert(entry.end(), descriptors.begin(), descriptors.end());
-
-  return entry;
+  std::memcpy(out, &entry_size, sizeof(entry_size));
+  std::memcpy(out + 4, &ios_device_id, sizeof(ios_device_id));
+  return size;
 }
 }  // namespace IOS::HLE

@@ -4,6 +4,7 @@
 #include "Core/IOS/USB/Emulated/WiiSpeak.h"
 
 #include <algorithm>
+#include <retro_miscellaneous.h>
 
 #include "Core/Config/MainSettings.h"
 #include "Core/HW/Memmap.h"
@@ -63,19 +64,29 @@ DeviceDescriptor WiiSpeak::GetDeviceDescriptor() const
   return m_device_descriptor;
 }
 
-std::vector<ConfigDescriptor> WiiSpeak::GetConfigurations() const
+static const ConfigDescriptor WII_SPEAK_CONFIGS[] = {{0x9, 0x2, 0x0030, 0x1, 0x1, 0x0, 0x80, 0x32}};
+static const InterfaceDescriptor WII_SPEAK_INTERFACES[] = {
+    {0x9, 0x4, 0x0, 0x0, 0x0, 0xFF, 0xFF, 0xFF, 0x0},
+    {0x9, 0x4, 0x0, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0x0}};
+
+size_t WiiSpeak::GetConfigurations(ConfigDescriptor* out, size_t max) const
 {
-  return m_config_descriptor;
+  return CopyDescriptors(out, max, WII_SPEAK_CONFIGS, ARRAY_SIZE(WII_SPEAK_CONFIGS), sizeof(*out));
 }
 
-std::vector<InterfaceDescriptor> WiiSpeak::GetInterfaces(u8 config) const
+size_t WiiSpeak::GetInterfaces(u8 config, InterfaceDescriptor* out, size_t max) const
 {
-  return m_interface_descriptor;
+  return CopyDescriptors(out, max, WII_SPEAK_INTERFACES, ARRAY_SIZE(WII_SPEAK_INTERFACES),
+                         sizeof(*out));
 }
 
-std::vector<EndpointDescriptor> WiiSpeak::GetEndpoints(u8 config, u8 iface, u8 alt) const
+size_t WiiSpeak::GetEndpoints(u8 config, u8 iface, u8 alt, EndpointDescriptor* out,
+                              size_t max) const
 {
-  return m_endpoint_descriptor;
+  static const EndpointDescriptor endpoints[] = {{0x7, 0x5, ENDPOINT_AUDIO_IN, 0x1, 0x0020, 0x1},
+                                                 {0x7, 0x5, ENDPOINT_DATA_OUT, 0x2, 0x0020, 0},
+                                                 {0x7, 0x5, ENDPOINT_AUDIO_OUT, 0x1, 0x0040, 0x1}};
+  return CopyDescriptors(out, max, endpoints, ARRAY_SIZE(endpoints), sizeof(*out));
 }
 
 bool WiiSpeak::Attach()
