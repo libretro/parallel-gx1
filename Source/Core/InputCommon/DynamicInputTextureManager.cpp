@@ -3,8 +3,6 @@
 
 #include "InputCommon/DynamicInputTextureManager.h"
 
-#include <set>
-
 #include "Common/CommonPaths.h"
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
@@ -23,19 +21,22 @@ DynamicInputTextureManager::~DynamicInputTextureManager() = default;
 void DynamicInputTextureManager::Load()
 {
   m_configuration.clear();
-  const std::set<std::string> dynamic_input_directories =
-      GetTextureDirectoriesForFirstMatchingGameId(File::GetUserPath(D_DYNAMICINPUT_IDX),
-                                                  SConfig::GetInstance().GetGameIDsForTextures());
-
-  for (const auto& dynamic_input_directory : dynamic_input_directories)
+  path_list_t directories;
+  path_list_t json_files;
+  path_list_init(&directories);
+  path_list_init(&json_files);
+  GetTextureDirectoriesForFirstMatchingGameId(File::GetUserPath(D_DYNAMICINPUT_IDX).c_str(),
+                                              SConfig::GetInstance().GetGameIDsForTextures(),
+                                              &directories);
+  for (unsigned d = 0; d < directories.count; d++)
   {
-    path_list_t json_files;
-    path_list_init(&json_files);
-    Common::DoFileSearch(dynamic_input_directory.c_str(), ".json", false, &json_files);
+    path_list_clear(&json_files);
+    Common::DoFileSearch(path_list_get(&directories, d), ".json", false, &json_files);
     for (unsigned i = 0; i < json_files.count; i++)
       m_configuration.emplace_back(path_list_get(&json_files, i));
-    path_list_free(&json_files);
   }
+  path_list_free(&json_files);
+  path_list_free(&directories);
 }
 
 void DynamicInputTextureManager::GenerateTextures(const Common::IniFile& file,

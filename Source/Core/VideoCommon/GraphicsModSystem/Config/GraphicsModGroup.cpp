@@ -45,11 +45,10 @@ void GraphicsModGroupConfig::Load()
       path_list_add(&known_paths, m_graphics_mods.mods[i].GetAbsolutePath().c_str());
   }
 
-  const auto try_add_mod = [&known_paths, this](const std::string& dir,
-                                                GraphicsModConfig::Source source) {
+  const auto try_add_mod = [&known_paths, this](const char* dir, GraphicsModConfig::Source source) {
     path_list_t files;
     path_list_init(&files);
-    Common::DoFileSearch(dir.c_str(), ".json", true, &files);
+    Common::DoFileSearch(dir, ".json", true, &files);
     for (unsigned i = 0; i < files.count; i++)
     {
       std::string file = path_list_get(&files, i);
@@ -69,21 +68,19 @@ void GraphicsModGroupConfig::Load()
     path_list_free(&files);
   };
 
-  const std::set<std::string> graphics_mod_user_directories =
-      GetTextureDirectoriesWithGameId(File::GetUserPath(D_GRAPHICSMOD_IDX), m_game_id);
+  path_list_t directories;
+  path_list_init(&directories);
+  GetTextureDirectoriesWithGameId(File::GetUserPath(D_GRAPHICSMOD_IDX).c_str(), m_game_id.c_str(),
+                                  &directories);
+  for (unsigned i = 0; i < directories.count; i++)
+    try_add_mod(path_list_get(&directories, i), GraphicsModConfig::Source::User);
 
-  for (const auto& graphics_mod_directory : graphics_mod_user_directories)
-  {
-    try_add_mod(graphics_mod_directory, GraphicsModConfig::Source::User);
-  }
-
-  const std::set<std::string> graphics_mod_system_directories = GetTextureDirectoriesWithGameId(
-      File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR, m_game_id);
-
-  for (const auto& graphics_mod_directory : graphics_mod_system_directories)
-  {
-    try_add_mod(graphics_mod_directory, GraphicsModConfig::Source::System);
-  }
+  const std::string system_directory = File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR;
+  path_list_clear(&directories);
+  GetTextureDirectoriesWithGameId(system_directory.c_str(), m_game_id.c_str(), &directories);
+  for (unsigned i = 0; i < directories.count; i++)
+    try_add_mod(path_list_get(&directories, i), GraphicsModConfig::Source::System);
+  path_list_free(&directories);
 
   // by weight; mods of equal weight stay in the order they were found
   GraphicsModConfig* const mods = m_graphics_mods.mods;

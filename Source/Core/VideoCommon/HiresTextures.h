@@ -4,10 +4,10 @@
 #pragma once
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
+#include "Common/PathList.h"
 #include "VideoCommon/TextureInfo.h"
 
 namespace VideoCommon
@@ -17,14 +17,16 @@ class TextureDataResource;
 
 enum class TextureFormat;
 
-std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_directory,
-                                                      const std::string& game_id);
+// Adds the directories under root_directory for game_id to result, which is then sorted and its
+// repeats dropped.
+void GetTextureDirectoriesWithGameId(const char* root_directory, const char* game_id,
+                                     path_list_t* result);
 
-// Tries each id in priority order, returning the directories for the first id that matches
-// anything. Returns an empty set if none of the ids match.
-std::set<std::string>
-GetTextureDirectoriesForFirstMatchingGameId(const std::string& root_directory,
-                                            const std::vector<std::string>& game_ids);
+// Tries each id in priority order, leaving in result the directories for the first id that
+// matches anything. Leaves result empty if none of the ids match.
+void GetTextureDirectoriesForFirstMatchingGameId(const char* root_directory,
+                                                 const std::vector<std::string>& game_ids,
+                                                 path_list_t* result);
 
 class HiresTexture
 {

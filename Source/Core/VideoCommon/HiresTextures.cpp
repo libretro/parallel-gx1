@@ -169,16 +169,19 @@ void HiresTexture::Update()
     return;
   }
 
-  const std::set<std::string> texture_directories = GetTextureDirectoriesForFirstMatchingGameId(
-      File::GetUserPath(D_HIRESTEXTURES_IDX), SConfig::GetInstance().GetGameIDsForTextures());
+  path_list_t texture_directories;
+  path_list_init(&texture_directories);
+  GetTextureDirectoriesForFirstMatchingGameId(File::GetUserPath(D_HIRESTEXTURES_IDX).c_str(),
+                                              SConfig::GetInstance().GetGameIDsForTextures(),
+                                              &texture_directories);
 
   static const char* const extensions[] = {".png", ".dds"};
 
   path_list_t texture_paths;
   path_list_init(&texture_paths);
-  for (const auto& texture_directory : texture_directories)
+  for (unsigned dir_index = 0; dir_index < texture_directories.count; dir_index++)
   {
-    const char* const texture_directory_path = texture_directory.c_str();
+    const char* const texture_directory_path = path_list_get(&texture_directories, dir_index);
     path_list_clear(&texture_paths);
     Common::DoFileSearch(&texture_directory_path, 1, extensions,
                          sizeof(extensions) / sizeof(extensions[0]), /*recursive*/ true,
@@ -222,10 +225,11 @@ void HiresTexture::Update()
     if (failed_insert)
     {
       ERROR_LOG(VIDEO, "One or more textures at path '%s' were already inserted",
-                texture_directory.c_str());
+                texture_directory_path);
     }
   }
   path_list_free(&texture_paths);
+  path_list_free(&texture_directories);
 
   const std::vector<std::string> game_ids_for_textures =
       SConfig::GetInstance().GetGameIDsForTextures();
@@ -285,65 +289,95 @@ VideoCommon::TextureDataResource* HiresTexture::LoadTexture() const
   return custom_resource_manager.GetTextureDataFromAsset(m_id, FileLibrary());
 }
 
-std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_directory,
-                                                      const std::string& game_id)
+// Whether the name of the .txt file at path, without its extension, is the game id, its first
+// three characters or "all".
+static bool MatchesGameIdOrAll(const char* path, size_t length, const char* game_id)
 {
-  std::set<std::string> result;
-  const std::string texture_directory = root_directory + game_id;
-
-  if (File::Exists(texture_directory))
+  const size_t id_length = std::strlen(game_id);
+  const size_t region_free_length = id_length < 3 ? id_length : 3;
+  size_t name_start = length;
+  size_t name_length;
+  while (name_start > 0 && path[name_start - 1] != '/'
+#ifdef _WIN32
+         && path[name_start - 1] != ':'
+#endif
+  )
   {
-    result.insert(texture_directory);
+    name_start--;
+  }
+  // the extension starts at the last '.', which DoFileSearch's ".txt" match puts 4 from the end
+  name_length = length - 4 - name_start;
+  path += name_start;
+  return (name_length == id_length && !std::memcmp(path, game_id, id_length)) ||
+         (name_length == region_free_length && !std::memcmp(path, game_id, region_free_length)) ||
+         (name_length == 3 && !std::memcmp(path, "all", 3));
+}
+
+void GetTextureDirectoriesWithGameId(const char* root_directory, const char* game_id,
+                                     path_list_t* result)
+{
+  const size_t root_length = std::strlen(root_directory);
+  const size_t id_length = std::strlen(game_id);
+  char* const directory = static_cast<char*>(std::malloc(root_length + id_length + 1));
+  if (!directory)
+    return;
+  std::memcpy(directory, root_directory, root_length);
+  std::memcpy(directory + root_length, game_id, id_length + 1);
+
+  if (File::Exists(directory))
+  {
+    path_list_add(result, directory);
   }
   else
   {
     // If there's no directory with the region-specific ID, look for a 3-character region-free one
-    const std::string region_free_directory = root_directory + game_id.substr(0, 3);
-
-    if (File::Exists(region_free_directory))
-    {
-      result.insert(region_free_directory);
-    }
+    directory[root_length + (id_length < 3 ? id_length : 3)] = '\0';
+    if (File::Exists(directory))
+      path_list_add(result, directory);
   }
-
-  const auto match_gameid_or_all = [game_id](const std::string& filename) {
-    std::string basename;
-    SplitPath(filename, nullptr, &basename, nullptr);
-    return basename == game_id || basename == game_id.substr(0, 3) || basename == "all";
-  };
+  std::free(directory);
 
   // Look for any other directories that might be specific to the given gameid
   path_list_t files;
   path_list_init(&files);
-  Common::DoFileSearch(root_directory.c_str(), ".txt", true, &files);
+  Common::DoFileSearch(root_directory, ".txt", true, &files);
   for (unsigned i = 0; i < files.count; i++)
   {
-    const std::string file = path_list_get(&files, i);
-    if (match_gameid_or_all(file))
-    {
-      // The following code is used to calculate the top directory
-      // of a found gameid.txt file
-      // ex:  <root directory>/My folder/gameids/<gameid>.txt
-      // would insert "<root directory>/My folder"
-      const auto directory_path = file.substr(root_directory.size());
-      const std::size_t first_path_separator_position = directory_path.find_first_of(DIR_SEP_CHR);
-      result.insert(root_directory + directory_path.substr(0, first_path_separator_position));
-    }
+    const char* const file = path_list_get(&files, i);
+    const size_t file_length = std::strlen(file);
+    if (file_length < root_length || !MatchesGameIdOrAll(file, file_length, game_id))
+      continue;
+
+    // The top directory of a found gameid.txt file
+    // ex:  <root directory>/My folder/gameids/<gameid>.txt
+    // adds "<root directory>/My folder"
+    const char* const below_root = file + root_length;
+    const char* const separator = std::strchr(below_root, DIR_SEP_CHR);
+    const size_t below_length =
+        separator ? static_cast<size_t>(separator - below_root) : std::strlen(below_root);
+    char* const top = static_cast<char*>(std::malloc(root_length + below_length + 1));
+    if (!top)
+      continue;
+    std::memcpy(top, root_directory, root_length);
+    std::memcpy(top + root_length, below_root, below_length);
+    top[root_length + below_length] = '\0';
+    path_list_add(result, top);
+    std::free(top);
   }
   path_list_free(&files);
 
-  return result;
+  path_list_sort_unique(result);
 }
 
-std::set<std::string>
-GetTextureDirectoriesForFirstMatchingGameId(const std::string& root_directory,
-                                            const std::vector<std::string>& game_ids)
+void GetTextureDirectoriesForFirstMatchingGameId(const char* root_directory,
+                                                 const std::vector<std::string>& game_ids,
+                                                 path_list_t* result)
 {
-  for (const auto& game_id : game_ids)
+  for (const std::string& game_id : game_ids)
   {
-    auto directories = GetTextureDirectoriesWithGameId(root_directory, game_id);
-    if (!directories.empty())
-      return directories;
+    path_list_clear(result);
+    GetTextureDirectoriesWithGameId(root_directory, game_id.c_str(), result);
+    if (result->count)
+      return;
   }
-  return {};
 }
