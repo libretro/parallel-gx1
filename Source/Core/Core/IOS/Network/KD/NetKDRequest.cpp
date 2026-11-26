@@ -507,7 +507,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
     return NWC24::WC24_ERR_SERVER;
   }
 
-  *mail_flag = std::strncmp(str_mail_flag, m_send_list.GetMailFlag().data(), 22) != 0;
+  *mail_flag = std::strncmp(str_mail_flag, m_send_list.GetMailFlag(), 22) != 0;
 
   {
     const char* const mail_span = m_http.GetHeaderValue("X-Wii-Mail-Check-Span");
@@ -670,9 +670,10 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
     }
 
     MailPart& part = parts[mail_count];
+    char mail_path[NWC24::Mail::WC24SendList::MAIL_PATH_SIZE];
+    m_send_list.GetMailPath(file_index, mail_path, sizeof(mail_path));
     part.data = static_cast<u8*>(std::malloc(mail_size ? mail_size : 1));
-    NWC24::ErrorCode res = part.data ? NWC24::ReadFromVFF(NWC24::Mail::SEND_BOX_PATH,
-                                                          m_send_list.GetMailPath(file_index),
+    NWC24::ErrorCode res = part.data ? NWC24::ReadFromVFF(NWC24::Mail::SEND_BOX_PATH, mail_path,
                                                           m_ios.GetFS(), part.data, mail_size) :
                                        NWC24::WC24_ERR_FILE_READ;
     if (res != NWC24::WC24_OK)

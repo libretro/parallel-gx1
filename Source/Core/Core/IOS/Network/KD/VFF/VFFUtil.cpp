@@ -7,7 +7,6 @@
 #include <cinttypes>
 #include <limits>
 #include <utility>
-#include <vector>
 
 // Does not compile if diskio.h is included first.
 // clang-format off
@@ -189,13 +188,13 @@ static DRESULT vff_ioctl(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, BYTE cmd, voi
 
 namespace IOS::HLE::NWC24
 {
-static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, size_t size)
+static ErrorCode WriteFile(const char* filename, const u8* tmp_buffer, size_t size)
 {
   FIL dst{};
-  const auto open_error_code = f_open(&dst, filename.c_str(), FA_CREATE_ALWAYS | FA_WRITE);
+  const auto open_error_code = f_open(&dst, filename, FA_CREATE_ALWAYS | FA_WRITE);
   if (open_error_code != FR_OK)
   {
-    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename.c_str());
+    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename);
     return WC24_ERR_FILE_OPEN;
   }
 
@@ -210,14 +209,14 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
         f_write(&dst, tmp_buffer + offset, chunk_size, &written_size);
     if (write_error_code != FR_OK)
     {
-      ERROR_LOG(IOS_WC24, "Failed to write file %s to VFF: %u", filename.c_str(),
+      ERROR_LOG(IOS_WC24, "Failed to write file %s to VFF: %u", filename,
                 std::to_underlying(write_error_code));
       return WC24_ERR_FILE_WRITE;
     }
 
     if (written_size != chunk_size)
     {
-      ERROR_LOG(IOS_WC24, "Failed to write bytes of file %s to VFF (%u != %u)", filename.c_str(),
+      ERROR_LOG(IOS_WC24, "Failed to write bytes of file %s to VFF (%u != %u)", filename,
                 written_size, chunk_size);
       return WC24_ERR_FILE_WRITE;
     }
@@ -229,20 +228,20 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
   const auto close_error_code = f_close(&dst);
   if (close_error_code != FR_OK)
   {
-    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename.c_str());
+    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename);
     return WC24_ERR_FILE_CLOSE;
   }
 
   return WC24_OK;
 }
 
-static ErrorCode ReadFile(const std::string& filename, u8* out, u32 size)
+static ErrorCode ReadFile(const char* filename, u8* out, u32 size)
 {
   FIL src{};
-  const auto open_error_code = f_open(&src, filename.c_str(), FA_READ);
+  const auto open_error_code = f_open(&src, filename, FA_READ);
   if (open_error_code != FR_OK)
   {
-    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename.c_str());
+    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename);
     return WC24_ERR_FILE_OPEN;
   }
 
@@ -252,15 +251,15 @@ static ErrorCode ReadFile(const std::string& filename, u8* out, u32 size)
   const auto read_error_code = f_read(&src, out, size, &read_size);
   if (read_error_code != FR_OK)
   {
-    ERROR_LOG(IOS_WC24, "Failed to read file %s in VFF: %u", filename.c_str(),
+    ERROR_LOG(IOS_WC24, "Failed to read file %s in VFF: %u", filename,
               static_cast<u32>(read_error_code));
     return WC24_ERR_FILE_READ;
   }
 
   if (read_size != size)
   {
-    ERROR_LOG(IOS_WC24, "Failed to read bytes of file %s to VFF (%u != %u)", filename.c_str(),
-              read_size, size);
+    ERROR_LOG(IOS_WC24, "Failed to read bytes of file %s to VFF (%u != %u)", filename, read_size,
+              size);
     return WC24_ERR_FILE_READ;
   }
 
@@ -270,7 +269,7 @@ static ErrorCode ReadFile(const std::string& filename, u8* out, u32 size)
   const auto close_error_code = f_close(&src);
   if (close_error_code != FR_OK)
   {
-    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename.c_str());
+    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename);
     return WC24_ERR_FILE_CLOSE;
   }
 
@@ -298,14 +297,14 @@ public:
 };
 }  // namespace
 
-ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                     const u8* data, size_t size)
+ErrorCode WriteToVFF(const char* path, const char* filename, FS::FileSystem* fs, const u8* data,
+                     size_t size)
 {
   VffFatFsCallbacks callbacks;
   struct WriteState
   {
-    const std::string& path;
-    const std::string& filename;
+    const char* path;
+    const char* filename;
     FS::FileSystem* fs;
     const u8* data;
     size_t size;
@@ -318,25 +317,24 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::F
       callbacks,
       [](void* user) {
         WriteState& state = *static_cast<WriteState*>(user);
-        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path.c_str(), FS::Mode::ReadWrite);
+        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path, FS::Mode::ReadWrite);
         if (!temp)
         {
-          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path);
           state.return_value = WC24_ERR_FILE_OPEN;
           return;
         }
 
         state.callbacks->m_vff = &*temp;
 
-        Common::ScopeGuard vff_delete_guard{
-            [&] { state.fs->Delete(PID_KD, PID_KD, state.path.c_str()); }};
+        Common::ScopeGuard vff_delete_guard{[&] { state.fs->Delete(PID_KD, PID_KD, state.path); }};
 
         FATFS fatfs{};
         const FRESULT fatfs_mount_error_code = f_mount(&fatfs, "", 0);
         if (fatfs_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_FILE_READ;
           return;
         }
@@ -347,7 +345,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::F
         if (vff_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_FILE_READ;
           return;
         }
@@ -369,14 +367,14 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::F
   return vff_state.return_value;
 }
 
-ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                      u8* out, size_t size)
+ErrorCode ReadFromVFF(const char* path, const char* filename, FS::FileSystem* fs, u8* out,
+                      size_t size)
 {
   VffFatFsCallbacks callbacks;
   struct ReadState
   {
-    const std::string& path;
-    const std::string& filename;
+    const char* path;
+    const char* filename;
     FS::FileSystem* fs;
     u8* out;
     u32 size;
@@ -389,10 +387,10 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
       callbacks,
       [](void* user) {
         ReadState& state = *static_cast<ReadState*>(user);
-        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path.c_str(), FS::Mode::ReadWrite);
+        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path, FS::Mode::ReadWrite);
         if (!temp)
         {
-          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path);
           state.return_value = WC24_ERR_NOT_FOUND;
           return;
         }
@@ -404,7 +402,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
         if (fatfs_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_BROKEN;
           return;
         }
@@ -415,7 +413,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
         if (vff_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_BROKEN;
           return;
         }
@@ -435,14 +433,13 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
   return vff_state.return_value;
 }
 
-ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename,
-                            FS::FileSystem* fs)
+ErrorCode DeleteFileFromVFF(const char* path, const char* filename, FS::FileSystem* fs)
 {
   VffFatFsCallbacks callbacks;
   struct DeleteState
   {
-    const std::string& path;
-    const std::string& filename;
+    const char* path;
+    const char* filename;
     FS::FileSystem* fs;
     VffFatFsCallbacks* callbacks;
     ErrorCode return_value;
@@ -453,10 +450,10 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
       callbacks,
       [](void* user) {
         DeleteState& state = *static_cast<DeleteState*>(user);
-        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path.c_str(), FS::Mode::ReadWrite);
+        auto temp = state.fs->OpenFile(PID_KD, PID_KD, state.path, FS::Mode::ReadWrite);
         if (!temp)
         {
-          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", state.path);
           state.return_value = WC24_ERR_NOT_FOUND;
           return;
         }
@@ -468,7 +465,7 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
         if (fatfs_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_BROKEN;
           return;
         }
@@ -479,16 +476,16 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
         if (vff_mount_error_code != FR_OK)
         {
           // The VFF is most likely broken.
-          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path.c_str());
+          ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", state.path);
           state.return_value = WC24_ERR_BROKEN;
           return;
         }
 
-        const FRESULT unlink_code = f_unlink(state.filename.c_str());
+        const FRESULT unlink_code = f_unlink(state.filename);
         if (unlink_code != FR_OK)
         {
-          ERROR_LOG(IOS_WC24, "Failed to delete file %s in VFF at: %s Code: %u",
-                    state.filename.c_str(), state.path.c_str(), static_cast<u32>(unlink_code));
+          ERROR_LOG(IOS_WC24, "Failed to delete file %s in VFF at: %s Code: %u", state.filename,
+                    state.path, static_cast<u32>(unlink_code));
           state.return_value = WC24_ERR_BROKEN;
           return;
         }

@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include <memory>
 #include <cstddef>
-#include <string>
-#include <vector>
+#include <memory>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/FS/FileSystem.h"
@@ -23,13 +21,12 @@ namespace NWC24
 constexpr u16 SECTOR_SIZE = 512;
 constexpr u16 VF_LITTLE_ENDIAN = 0xFFFE;
 constexpr u16 VF_BIG_ENDIAN = 0xFEFF;
-ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                     const u8* data, size_t size);
+ErrorCode WriteToVFF(const char* path, const char* filename, FS::FileSystem* fs, const u8* data,
+                     size_t size);
 // Reads exactly size bytes of the file into out.
-ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                      u8* out, size_t size);
-ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename,
-                            FS::FileSystem* fs);
+ErrorCode ReadFromVFF(const char* path, const char* filename, FS::FileSystem* fs, u8* out,
+                      size_t size);
+ErrorCode DeleteFileFromVFF(const char* path, const char* filename, FS::FileSystem* fs);
 
 #pragma pack(push, 1)
 struct VFFHeader final

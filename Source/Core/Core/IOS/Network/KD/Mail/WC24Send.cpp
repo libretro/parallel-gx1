@@ -140,7 +140,9 @@ u32 WC24SendList::GetMailSize(u32 index) const
 ErrorCode WC24SendList::DeleteMessage(u32 index)
 {
   ASSERT(!IsDisabled());
-  ErrorCode error = NWC24::DeleteFileFromVFF(NWC24::Mail::SEND_BOX_PATH, GetMailPath(index), m_fs);
+  char mail_path[MAIL_PATH_SIZE];
+  GetMailPath(index, mail_path, sizeof(mail_path));
+  ErrorCode error = NWC24::DeleteFileFromVFF(NWC24::Mail::SEND_BOX_PATH, mail_path, m_fs);
   if (error != WC24_OK)
     return error;
 
@@ -155,9 +157,9 @@ ErrorCode WC24SendList::DeleteMessage(u32 index)
   return WC24_OK;
 }
 
-std::string WC24SendList::GetMailPath(u32 index) const
+void WC24SendList::GetMailPath(u32 index, char* out, size_t out_size) const
 {
-  return StringFromFormat("mb/s%07d.msg", GetEntryId(index));
+  snprintf(out, out_size, "mb/s%07d.msg", GetEntryId(index));
 }
 
 u32 WC24SendList::GetMailToSend(u32* out) const
@@ -191,9 +193,9 @@ bool WC24SendList::GetNextFreeEntryIndex(u32* free_index) const
   return false;
 }
 
-std::string_view WC24SendList::GetMailFlag() const
+const char* WC24SendList::GetMailFlag() const
 {
   ASSERT(!IsDisabled());
-  return {m_data.header.mail_flag, sizeof(m_data.header.mail_flag)};
+  return m_data.header.mail_flag;
 }
 }  // namespace IOS::HLE::NWC24::Mail

@@ -5,8 +5,7 @@
 
 #include <cinttypes>
 #include <memory>
-#include <string>
-#include <string_view>
+#include <cstddef>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -35,7 +34,8 @@ public:
   void WriteSendList() const;
   bool IsDisabled() const;
 
-  std::string_view GetMailFlag() const;
+  // The fixed-size mail flag field, not necessarily terminated
+  const char* GetMailFlag() const;
   u32 GetNumberOfMail() const;
   static constexpr u32 MAX_MAILS_PER_SEND = 16;
   // Writes the entry indices of up to MAX_MAILS_PER_SEND mails to out; returns how many.
@@ -43,7 +43,9 @@ public:
   u32 GetEntryId(u32 entry_index) const;
   u32 GetMailSize(u32 index) const;
   ErrorCode DeleteMessage(u32 index);
-  std::string GetMailPath(u32 index) const;
+  static constexpr size_t MAIL_PATH_SIZE = 24;
+  // Writes the path of the mail inside the send box VFF to out.
+  void GetMailPath(u32 index, char* out, size_t out_size) const;
   // False when every entry is taken
   bool GetNextFreeEntryIndex(u32* index) const;
 
