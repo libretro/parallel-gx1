@@ -184,7 +184,9 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
   }
 
   const bool current_game_only = Config::Get(Config::SESSION_GCI_FOLDER_CURRENT_GAME_ONLY);
-  const std::vector<std::string> filenames = Common::DoFileSearch(directory, ".gci");
+  path_list_t filenames;
+  path_list_init(&filenames);
+  Common::DoFileSearch(directory.c_str(), ".gci", false, &filenames);
 
   // leave about 10% of free space on the card if possible
   const int total_blocks = Memcard::MbitToFreeBlocks(m_hdr.m_data.m_size_mb);
@@ -195,19 +197,20 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
   size_t failed_loads_current_game = 0;
   for (int pass = 0; pass < (current_game_only ? 1 : 2); pass++)
   {
-    for (const std::string& filename : filenames)
+    for (unsigned i = 0; i < filenames.count; i++)
     {
+      const char* const filename = path_list_get(&filenames, i);
       // leave some free file entries for new saves that might be created
       if (m_num_saves >= Memcard::DIRLEN || (pass == 1 && m_num_saves > 112))
         break;
 
       Memcard::GCIFile& gci = m_saves[m_num_saves];
       ResetSave(m_num_saves);
-      strlcpy(gci.m_filename, filename.c_str(), sizeof(gci.m_filename));
+      strlcpy(gci.m_filename, filename, sizeof(gci.m_filename));
       if (!gci.LoadHeader())
       {
         if (pass == 0)
-          ERROR_LOG(EXPANSIONINTERFACE, "Failed to load header of %s", filename.c_str());
+          ERROR_LOG(EXPANSIONINTERFACE, "Failed to load header of %s", filename);
         continue;
       }
 
@@ -235,6 +238,7 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
       LoadGCI();
     }
   }
+  path_list_free(&filenames);
   if (m_num_saves < Memcard::DIRLEN)
     ResetSave(m_num_saves);
 

@@ -63,12 +63,16 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
     if (!File::IsDirectory(dump_dir))
       File::CreateDir(dump_dir);
 
-    for (auto& filename : Common::DoFileSearch(dump_dir, ".png", true))
+    path_list_t filenames;
+    path_list_init(&filenames);
+    Common::DoFileSearch(dump_dir.c_str(), ".png", true, &filenames);
+    for (unsigned i = 0; i < filenames.count; i++)
     {
       std::string name;
-      SplitPath(filename, nullptr, &name, nullptr);
+      SplitPath(path_list_get(&filenames, i), nullptr, &name, nullptr);
       string_set_add(&m_dumped_textures, name.c_str(), name.size());
     }
+    path_list_free(&filenames);
 
     NOTICE_LOG(VIDEO, "Found %" PRIu64 " dumped textures that will not be re-dumped.",
                (u64)m_dumped_textures.count);

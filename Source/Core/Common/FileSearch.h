@@ -3,22 +3,22 @@
 
 #pragma once
 
-#include <string>
-#include <string_view>
-#include <vector>
+#include <cstddef>
+
+#include "Common/PathList.h"
 
 namespace Common
 {
-// Callers can pass empty "exts" to indicate they want all files + directories in results
-// Otherwise, only files matching the extensions are returned
-std::vector<std::string> DoFileSearch(const std::string_view* directories, size_t directory_count,
-                                      const std::string_view* exts, size_t ext_count,
-                                      bool recursive = false);
+// Adds the paths found in the directories to result, then sorts it and drops repeats; the paths
+// have "/" as their separator. Callers can pass no "exts" to indicate they want all files and
+// directories; otherwise, only files matching the extensions (ignoring case) are added.
+void DoFileSearch(const char* const* directories, size_t directory_count, const char* const* exts,
+                  size_t ext_count, bool recursive, path_list_t* result);
 
-inline std::vector<std::string> DoFileSearch(std::string_view directory, std::string_view ext,
-                                             bool recursive = false)
+inline void DoFileSearch(const char* directory, const char* ext, bool recursive,
+                         path_list_t* result)
 {
-  return DoFileSearch(&directory, 1, &ext, 1, recursive);
+  DoFileSearch(&directory, 1, &ext, 1, recursive, result);
 }
 
 }  // namespace Common

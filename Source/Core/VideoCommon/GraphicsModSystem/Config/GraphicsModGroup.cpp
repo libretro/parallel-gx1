@@ -47,23 +47,26 @@ void GraphicsModGroupConfig::Load()
 
   const auto try_add_mod = [&known_paths, this](const std::string& dir,
                                                 GraphicsModConfig::Source source) {
-    const auto files = Common::DoFileSearch(dir, ".json", true);
-    for (const auto& file : files)
+    path_list_t files;
+    path_list_init(&files);
+    Common::DoFileSearch(dir.c_str(), ".json", true, &files);
+    for (unsigned i = 0; i < files.count; i++)
     {
+      std::string file = path_list_get(&files, i);
       std::string basename;
       SplitPath(file, nullptr, &basename, nullptr);
       if (basename == "metadata")
       {
-        auto file_copy = file;
-        UnifyPathSeparators(file_copy);
-        if (path_list_find(&known_paths, file_copy.c_str()) >= 0)
-          return;
+        UnifyPathSeparators(file);
+        if (path_list_find(&known_paths, file.c_str()) >= 0)
+          break;
 
         GraphicsModConfig* const mod = AddGraphicsMod(&m_graphics_mods);
-        if (mod && !GraphicsModConfig::Create(file_copy, source, mod))
+        if (mod && !GraphicsModConfig::Create(file, source, mod))
           FreeGraphicsModConfig(&m_graphics_mods.mods[--m_graphics_mods.count]);
       }
     }
+    path_list_free(&files);
   };
 
   const std::set<std::string> graphics_mod_user_directories =

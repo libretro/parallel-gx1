@@ -31,8 +31,12 @@ std::vector<std::string> GetProfilesFromSetting(const std::string& setting, cons
     const std::string path = root + std::string(StripWhitespace(setting_choice));
     if (File::IsDirectory(path))
     {
-      const auto files_under_directory = Common::DoFileSearch(path, ".ini", true);
-      result.insert(result.end(), files_under_directory.begin(), files_under_directory.end());
+      path_list_t files_under_directory;
+      path_list_init(&files_under_directory);
+      Common::DoFileSearch(path.c_str(), ".ini", true, &files_under_directory);
+      for (unsigned i = 0; i < files_under_directory.count; i++)
+        result.push_back(path_list_get(&files_under_directory, i));
+      path_list_free(&files_under_directory);
     }
     else
     {

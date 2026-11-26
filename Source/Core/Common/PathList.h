@@ -42,6 +42,8 @@ int path_list_find(const path_list_t* list, const char* path);
 bool path_list_copy(path_list_t* dst, const path_list_t* src);
 /* Moves src's paths into dst, freeing dst's; src is left empty. */
 void path_list_move(path_list_t* dst, path_list_t* src);
+/* Sorts the paths bytewise and drops repeats, as a set of strings keeps them. */
+void path_list_sort_unique(path_list_t* list);
 
 #ifdef __cplusplus
 }

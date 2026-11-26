@@ -29,11 +29,12 @@ void DynamicInputTextureManager::Load()
 
   for (const auto& dynamic_input_directory : dynamic_input_directories)
   {
-    const auto json_files = Common::DoFileSearch(dynamic_input_directory, ".json");
-    for (auto& file : json_files)
-    {
-      m_configuration.emplace_back(file);
-    }
+    path_list_t json_files;
+    path_list_init(&json_files);
+    Common::DoFileSearch(dynamic_input_directory.c_str(), ".json", false, &json_files);
+    for (unsigned i = 0; i < json_files.count; i++)
+      m_configuration.emplace_back(path_list_get(&json_files, i));
+    path_list_free(&json_files);
   }
 }
 

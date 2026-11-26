@@ -172,18 +172,22 @@ void HiresTexture::Update()
   const std::set<std::string> texture_directories = GetTextureDirectoriesForFirstMatchingGameId(
       File::GetUserPath(D_HIRESTEXTURES_IDX), SConfig::GetInstance().GetGameIDsForTextures());
 
-  static constexpr std::string_view extensions[] = {".png", ".dds"};
+  static const char* const extensions[] = {".png", ".dds"};
 
+  path_list_t texture_paths;
+  path_list_init(&texture_paths);
   for (const auto& texture_directory : texture_directories)
   {
-    const std::string_view texture_directory_view{texture_directory};
-    const auto texture_paths = Common::DoFileSearch(&texture_directory_view, 1, extensions,
-                                                    sizeof(extensions) / sizeof(extensions[0]),
-                                                    /*recursive*/ true);
+    const char* const texture_directory_path = texture_directory.c_str();
+    path_list_clear(&texture_paths);
+    Common::DoFileSearch(&texture_directory_path, 1, extensions,
+                         sizeof(extensions) / sizeof(extensions[0]), /*recursive*/ true,
+                         &texture_paths);
 
     bool failed_insert = false;
-    for (auto& path : texture_paths)
+    for (unsigned i = 0; i < texture_paths.count; i++)
     {
+      const std::string path = path_list_get(&texture_paths, i);
       std::string filename;
       SplitPath(path, nullptr, &filename, nullptr);
 
@@ -221,6 +225,7 @@ void HiresTexture::Update()
                 texture_directory.c_str());
     }
   }
+  path_list_free(&texture_paths);
 
   const std::vector<std::string> game_ids_for_textures =
       SConfig::GetInstance().GetGameIDsForTextures();
@@ -308,9 +313,12 @@ std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_di
   };
 
   // Look for any other directories that might be specific to the given gameid
-  const auto files = Common::DoFileSearch(root_directory, ".txt", true);
-  for (const auto& file : files)
+  path_list_t files;
+  path_list_init(&files);
+  Common::DoFileSearch(root_directory.c_str(), ".txt", true, &files);
+  for (unsigned i = 0; i < files.count; i++)
   {
+    const std::string file = path_list_get(&files, i);
     if (match_gameid_or_all(file))
     {
       // The following code is used to calculate the top directory
@@ -322,6 +330,7 @@ std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_di
       result.insert(root_directory + directory_path.substr(0, first_path_separator_position));
     }
   }
+  path_list_free(&files);
 
   return result;
 }

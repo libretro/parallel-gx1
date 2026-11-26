@@ -92,6 +92,58 @@ bool path_list_copy(path_list_t *dst, const path_list_t *src)
   return true;
 }
 
+static int path_list_less(const path_list_t *list, size_t a, size_t b)
+{
+  return strcmp(list->text + a, list->text + b) < 0;
+}
+
+static void path_list_sift_down(path_list_t *list, unsigned root, unsigned count)
+{
+  size_t *offsets = list->offsets;
+  for (;;)
+  {
+    unsigned child = root * 2 + 1;
+    size_t moved;
+    if (child >= count)
+      return;
+    if (child + 1 < count && path_list_less(list, offsets[child], offsets[child + 1]))
+      child++;
+    if (!path_list_less(list, offsets[root], offsets[child]))
+      return;
+    moved = offsets[root];
+    offsets[root] = offsets[child];
+    offsets[child] = moved;
+    root = child;
+  }
+}
+
+void path_list_sort_unique(path_list_t *list)
+{
+  size_t *offsets = list->offsets;
+  unsigned count = list->count;
+  unsigned kept;
+  unsigned i;
+  if (count < 2)
+    return;
+  /* heap sort of the offsets; the text stays where it is */
+  for (i = count / 2; i > 0; i--)
+    path_list_sift_down(list, i - 1, count);
+  for (i = count - 1; i > 0; i--)
+  {
+    size_t moved = offsets[0];
+    offsets[0] = offsets[i];
+    offsets[i] = moved;
+    path_list_sift_down(list, 0, i);
+  }
+  kept = 1;
+  for (i = 1; i < count; i++)
+  {
+    if (strcmp(list->text + offsets[i], list->text + offsets[kept - 1]))
+      offsets[kept++] = offsets[i];
+  }
+  list->count = kept;
+}
+
 void path_list_move(path_list_t *dst, path_list_t *src)
 {
   path_list_free(dst);

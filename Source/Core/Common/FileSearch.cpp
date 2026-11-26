@@ -3,21 +3,24 @@
 
 #include "Common/FileSearch.h"
 
+#include <cstdlib>
 #include <cstring>
 
 #include <retro_dirent.h>
+#include <retro_miscellaneous.h>
 
 #include "Common/CommonPaths.h"
 
 namespace Common
 {
-static bool EndsWithNoCase(const char* name, size_t name_len, std::string_view ext)
+static bool EndsWithNoCase(const char* name, size_t name_len, const char* ext)
 {
+  const size_t ext_len = std::strlen(ext);
   size_t i;
-  if (name_len < ext.size())
+  if (name_len < ext_len)
     return false;
-  name += name_len - ext.size();
-  for (i = 0; i < ext.size(); i++)
+  name += name_len - ext_len;
+  for (i = 0; i < ext_len; i++)
   {
     char a = name[i];
     char b = ext[i];
@@ -31,8 +34,7 @@ static bool EndsWithNoCase(const char* name, size_t name_len, std::string_view e
   return true;
 }
 
-static bool MatchesAny(const char* name, size_t name_len, const std::string_view* exts,
-                       size_t ext_count)
+static bool MatchesAny(const char* name, size_t name_len, const char* const* exts, size_t ext_count)
 {
   size_t i;
   for (i = 0; i < ext_count; i++)
@@ -41,12 +43,26 @@ static bool MatchesAny(const char* name, size_t name_len, const std::string_view
   return false;
 }
 
-static void Search(const std::string& directory, const std::string_view* exts, size_t ext_count,
-                   bool recursive, std::vector<std::string>* result)
+// Searches the directory whose path is the length bytes in path, a buffer of PATH_MAX_LENGTH that
+// its entries' paths are built in; a path that does not fit is skipped.
+static void Search(char* path, size_t length, const char* const* exts, size_t ext_count,
+                   bool recursive, path_list_t* result)
 {
-  struct RDIR* dir = retro_opendir_include_hidden(directory.c_str(), true);
+  struct RDIR* dir;
+  size_t base = length;
+  path[length] = '\0';
+  dir = retro_opendir_include_hidden(path, true);
   if (!dir)
     return;
+  if (base && path[base - 1] != DIR_SEP_CHR && path[base - 1] != '\\')
+  {
+    if (base + 1 >= PATH_MAX_LENGTH)
+    {
+      retro_closedir(dir);
+      return;
+    }
+    path[base++] = DIR_SEP_CHR;
+  }
   while (retro_readdir(dir))
   {
     const char* name = retro_dirent_get_name(dir);
@@ -55,89 +71,53 @@ static void Search(const std::string& directory, const std::string_view* exts, s
     if (!name || (name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2]))))
       continue;
     name_len = std::strlen(name);
+    if (base + name_len >= PATH_MAX_LENGTH)
+      continue;
     is_dir = retro_dirent_is_dir(dir, nullptr);
-
-    std::string path = directory;
-    if (!path.empty() && path.back() != DIR_SEP_CHR && path.back() != '\\')
-      path += DIR_SEP_CHR;
-    path.append(name, name_len);
+    std::memcpy(path + base, name, name_len + 1);
 
     if (!ext_count || (!is_dir && MatchesAny(name, name_len, exts, ext_count)))
-      result->push_back(path);
+      path_list_add_len(result, path, base + name_len);
     if (is_dir && recursive)
-      Search(path, exts, ext_count, true, result);
+      Search(path, base + name_len, exts, ext_count, true, result);
   }
   retro_closedir(dir);
 }
 
-static void SiftDown(std::string* paths, size_t root, size_t count)
+void DoFileSearch(const char* const* directories, size_t directory_count, const char* const* exts,
+                  size_t ext_count, bool recursive, path_list_t* result)
 {
-  for (;;)
-  {
-    size_t child = root * 2 + 1;
-    if (child >= count)
-      return;
-    if (child + 1 < count && paths[child] < paths[child + 1])
-      child++;
-    if (!(paths[root] < paths[child]))
-      return;
-    paths[root].swap(paths[child]);
-    root = child;
-  }
-}
-
-std::vector<std::string> DoFileSearch(const std::string_view* directories, size_t directory_count,
-                                      const std::string_view* exts, size_t ext_count,
-                                      bool recursive)
-{
-  std::vector<std::string> result;
+  char* const path = static_cast<char*>(std::malloc(PATH_MAX_LENGTH));
   size_t i;
-  for (i = 0; i < directory_count; i++)
+  if (path)
   {
-    std::string dir(directories[i]);
-    while (dir.size() > 1 && (dir.back() == DIR_SEP_CHR || dir.back() == '\\'))
-      dir.pop_back();
-    Search(dir, exts, ext_count, recursive, &result);
+    for (i = 0; i < directory_count; i++)
+    {
+      size_t length = std::strlen(directories[i]);
+      while (length > 1 &&
+             (directories[i][length - 1] == DIR_SEP_CHR || directories[i][length - 1] == '\\'))
+      {
+        length--;
+      }
+      if (length >= PATH_MAX_LENGTH)
+        continue;
+      std::memcpy(path, directories[i], length);
+      Search(path, length, exts, ext_count, recursive, result);
+    }
+    std::free(path);
   }
 
-  // Sort in place (heap sort) and drop duplicates (the caller gave e.g.
-  // duplicate or overlapping directories).
-  const size_t count = result.size();
-  if (count > 1)
-  {
-    for (i = count / 2; i > 0; i--)
-      SiftDown(result.data(), i - 1, count);
-    for (i = count - 1; i > 0; i--)
-    {
-      result[0].swap(result[i]);
-      SiftDown(result.data(), 0, i);
-    }
-    size_t kept = 1;
-    for (i = 1; i < count; i++)
-    {
-      if (result[i] != result[kept - 1])
-      {
-        if (i != kept)
-          result[kept].swap(result[i]);
-        kept++;
-      }
-    }
-    result.resize(kept);
-  }
+  // Sorted, without repeats (the caller gave e.g. duplicate or overlapping directories).
+  path_list_sort_unique(result);
 
   // Dolphin expects to be able to use "/" (DIR_SEP) everywhere.
 #ifdef _WIN32
-  for (auto& path : result)
+  for (i = 0; i < result->text_size; i++)
   {
-    for (char& c : path)
-    {
-      if (c == '\\')
-        c = DIR_SEP_CHR;
-    }
+    if (result->text[i] == '\\')
+      result->text[i] = DIR_SEP_CHR;
   }
 #endif
-
-  return result;
 }
 
 }  // namespace Common
