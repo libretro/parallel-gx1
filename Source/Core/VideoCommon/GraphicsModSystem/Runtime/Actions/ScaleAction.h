@@ -11,7 +11,7 @@
 class ScaleAction final : public GraphicsModAction
 {
 public:
-  static constexpr std::string_view factory_name = "scale";
+  static constexpr char factory_name[] = "scale";
   explicit ScaleAction(Common::Vec3 scale);
   void BeforeEFB(GraphicsModActionData::PreEFB*) override;
   void OnProjection(GraphicsModActionData::Projection*) override;

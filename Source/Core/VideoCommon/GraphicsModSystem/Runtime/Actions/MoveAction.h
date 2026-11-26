@@ -11,7 +11,7 @@
 class MoveAction final : public GraphicsModAction
 {
 public:
-  static constexpr std::string_view factory_name = "move";
+  static constexpr char factory_name[] = "move";
   explicit MoveAction(Common::Vec3 position_offset);
   void OnProjection(GraphicsModActionData::Projection* projection) override;
   void OnProjectionAndTexture(GraphicsModActionData::Projection* projection) override;

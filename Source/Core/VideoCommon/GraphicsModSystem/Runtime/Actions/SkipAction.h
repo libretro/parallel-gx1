@@ -8,7 +8,7 @@
 class SkipAction final : public GraphicsModAction
 {
 public:
-  static constexpr std::string_view factory_name = "skip";
+  static constexpr char factory_name[] = "skip";
   void OnDrawStarted(GraphicsModActionData::DrawStarted*) override;
   void BeforeEFB(GraphicsModActionData::PreEFB*) override;
 };

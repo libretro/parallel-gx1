@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-
-struct GraphicsModConfig;
+#include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
 
 class GraphicsModGroupConfig
 {
@@ -22,13 +21,13 @@ public:
 
   void Load();
 
-  const std::vector<GraphicsModConfig>& GetMods() const;
-  std::vector<GraphicsModConfig>& GetMods();
+  // The mods, by weight
+  const GraphicsModConfig* GetMods(u32* count) const;
 
   const std::string& GetGameID() const;
 
 private:
   std::string GetPath() const;
   std::string m_game_id;
-  std::vector<GraphicsModConfig> m_graphics_mods;
+  GraphicsModList m_graphics_mods = {};
 };

@@ -3,6 +3,8 @@
 
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.h"
 
+#include <cstring>
+
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/MoveAction.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/PrintAction.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/ScaleAction.h"
@@ -10,21 +12,21 @@
 
 namespace GraphicsModActionFactory
 {
-GraphicsModAction* Create(std::string_view name, const Common::Vec3& xyz)
+GraphicsModAction* Create(const char* name, const Common::Vec3& xyz)
 {
-  if (name == PrintAction::factory_name)
+  if (!std::strcmp(name, PrintAction::factory_name))
   {
     return new PrintAction();
   }
-  else if (name == SkipAction::factory_name)
+  else if (!std::strcmp(name, SkipAction::factory_name))
   {
     return new SkipAction();
   }
-  else if (name == MoveAction::factory_name)
+  else if (!std::strcmp(name, MoveAction::factory_name))
   {
     return new MoveAction(xyz);
   }
-  else if (name == ScaleAction::factory_name)
+  else if (!std::strcmp(name, ScaleAction::factory_name))
   {
     return new ScaleAction(xyz);
   }

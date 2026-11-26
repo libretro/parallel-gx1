@@ -10,6 +10,7 @@
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
+#include "Common/PathList.h"
 #include "Common/StringUtil.h"
 
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
@@ -20,23 +21,28 @@ GraphicsModGroupConfig::GraphicsModGroupConfig(std::string game_id) : m_game_id(
 {
 }
 
-GraphicsModGroupConfig::~GraphicsModGroupConfig() = default;
+GraphicsModGroupConfig::~GraphicsModGroupConfig()
+{
+  FreeGraphicsModList(&m_graphics_mods);
+}
 
 void GraphicsModGroupConfig::Load()
 {
   const std::string file_path = GetPath();
 
-  std::set<std::string> known_paths;
+  // The profile's mods, then those found in the folders that it does not list
+  path_list_t known_paths;
+  path_list_init(&known_paths);
   if (File::Exists(file_path))
   {
-    std::vector<GraphicsModConfig> mods;
-    if (!LoadGraphicsModProfile(file_path, &mods))
-      return;
-    for (auto& mod : mods)
+    if (!LoadGraphicsModProfile(file_path, &m_graphics_mods))
     {
-      known_paths.insert(mod.GetAbsolutePath());
-      m_graphics_mods.push_back(std::move(mod));
+      FreeGraphicsModList(&m_graphics_mods);
+      path_list_free(&known_paths);
+      return;
     }
+    for (u32 i = 0; i < m_graphics_mods.count; i++)
+      path_list_add(&known_paths, m_graphics_mods.mods[i].GetAbsolutePath().c_str());
   }
 
   const auto try_add_mod = [&known_paths, this](const std::string& dir,
@@ -50,12 +56,12 @@ void GraphicsModGroupConfig::Load()
       {
         auto file_copy = file;
         UnifyPathSeparators(file_copy);
-        if (known_paths.contains(file_copy))
+        if (path_list_find(&known_paths, file_copy.c_str()) >= 0)
           return;
 
-        GraphicsModConfig mod;
-        if (GraphicsModConfig::Create(file_copy, source, &mod))
-          m_graphics_mods.push_back(std::move(mod));
+        GraphicsModConfig* const mod = AddGraphicsMod(&m_graphics_mods);
+        if (mod && !GraphicsModConfig::Create(file_copy, source, mod))
+          FreeGraphicsModConfig(&m_graphics_mods.mods[--m_graphics_mods.count]);
       }
     }
   };
@@ -77,21 +83,23 @@ void GraphicsModGroupConfig::Load()
   }
 
   // by weight; mods of equal weight stay in the order they were found
-  for (size_t i = 1; i < m_graphics_mods.size(); i++)
+  GraphicsModConfig* const mods = m_graphics_mods.mods;
+  for (u32 i = 1; i < m_graphics_mods.count; i++)
   {
-    for (size_t j = i; j > 0 && m_graphics_mods[j - 1].m_weight > m_graphics_mods[j].m_weight; j--)
-      std::swap(m_graphics_mods[j - 1], m_graphics_mods[j]);
+    for (u32 j = i; j > 0 && mods[j - 1].m_weight > mods[j].m_weight; j--)
+    {
+      const GraphicsModConfig moved = mods[j - 1];
+      mods[j - 1] = mods[j];
+      mods[j] = moved;
+    }
   }
+  path_list_free(&known_paths);
 }
 
-const std::vector<GraphicsModConfig>& GraphicsModGroupConfig::GetMods() const
+const GraphicsModConfig* GraphicsModGroupConfig::GetMods(u32* count) const
 {
-  return m_graphics_mods;
-}
-
-std::vector<GraphicsModConfig>& GraphicsModGroupConfig::GetMods()
-{
-  return m_graphics_mods;
+  *count = m_graphics_mods.count;
+  return m_graphics_mods.mods;
 }
 
 const std::string& GraphicsModGroupConfig::GetGameID() const

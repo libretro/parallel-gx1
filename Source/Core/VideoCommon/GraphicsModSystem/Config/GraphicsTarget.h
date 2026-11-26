@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <string>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureDecoder.h"
@@ -19,22 +19,26 @@ enum class GraphicsTargetKind
   Projection,
 };
 
-// What a mod's feature applies to; which fields are set depends on the kind
+// What a mod's feature applies to; which fields are set depends on the kind. Zeroed is empty, and
+// FreeGraphicsTarget frees what it owns.
 struct GraphicsTargetConfig
 {
-  GraphicsTargetKind kind = GraphicsTargetKind::DrawStartedTexture;
+  GraphicsTargetKind kind;
   // the texture targets, and a projection when has_texture_info is set
-  bool has_texture_info = false;
-  std::string texture_info;
+  bool has_texture_info;
+  char* texture_info;  // owned, null when there is none
   // EFB and XFB
-  u32 width = 0;
-  u32 height = 0;
-  TextureFormat texture_format = TextureFormat::I4;
+  u32 width;
+  u32 height;
+  TextureFormat texture_format;
   // a projection
-  ProjectionType projection_type = ProjectionType::Perspective;
+  ProjectionType projection_type;
 };
 
-/* A target field as a mod's file gives it: absent, a string, or a value of another kind. */
+void FreeGraphicsTarget(GraphicsTargetConfig* target);
+
+/* A target field as a mod's file gives it: absent, a string, or a value of another kind. Zeroed is
+ * absent; FreeGraphicsTargetField frees its text. */
 struct GraphicsTargetField
 {
   enum class Kind
@@ -43,10 +47,13 @@ struct GraphicsTargetField
     String,
     Other
   };
-  Kind kind = Kind::Absent;
-  std::string text;
+  Kind kind;
+  char* text;  // owned, the string's
 };
 
-// False, with the problem logged, for a target the mod gives wrongly
+void FreeGraphicsTargetField(GraphicsTargetField* field);
+
+// False, with the problem logged, for a target the mod gives wrongly; target is to be zeroed first,
+// and is freed with FreeGraphicsTarget either way.
 bool MakeTarget(const GraphicsTargetField& type, const GraphicsTargetField& texture_filename,
                 const GraphicsTargetField& value, GraphicsTargetConfig* target);

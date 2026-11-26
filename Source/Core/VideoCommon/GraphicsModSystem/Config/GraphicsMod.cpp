@@ -4,6 +4,7 @@
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
 #include <string_view>
 
@@ -20,6 +21,79 @@
 
 namespace
 {
+// A grown array's new zeroed last element, or nullptr when out of memory
+void* AddElement(void** elements, u32* count, u32* capacity, size_t size)
+{
+  if (*count == *capacity)
+  {
+    const u32 new_capacity = *capacity ? *capacity * 2 : 4;
+    void* const grown = std::realloc(*elements, new_capacity * size);
+    if (!grown)
+      return nullptr;
+    *elements = grown;
+    *capacity = new_capacity;
+  }
+  char* const element = static_cast<char*>(*elements) + size * (*count)++;
+  std::memset(element, 0, size);
+  return element;
+}
+
+GraphicsTargetConfig* AddTarget(GraphicsTargetGroupConfig* group)
+{
+  return static_cast<GraphicsTargetConfig*>(
+      AddElement(reinterpret_cast<void**>(&group->m_targets), &group->m_target_count,
+                 &group->m_target_capacity, sizeof(GraphicsTargetConfig)));
+}
+
+GraphicsTargetGroupConfig* AddGroup(GraphicsModConfig* mod)
+{
+  return static_cast<GraphicsTargetGroupConfig*>(
+      AddElement(reinterpret_cast<void**>(&mod->m_groups), &mod->m_group_count,
+                 &mod->m_group_capacity, sizeof(GraphicsTargetGroupConfig)));
+}
+
+GraphicsModFeatureConfig* AddFeature(GraphicsModConfig* mod)
+{
+  return static_cast<GraphicsModFeatureConfig*>(
+      AddElement(reinterpret_cast<void**>(&mod->m_features), &mod->m_feature_count,
+                 &mod->m_feature_capacity, sizeof(GraphicsModFeatureConfig)));
+}
+
+void ClearTargets(GraphicsTargetGroupConfig* group)
+{
+  for (u32 i = 0; i < group->m_target_count; i++)
+    FreeGraphicsTarget(&group->m_targets[i]);
+  group->m_target_count = 0;
+}
+
+void ClearGroups(GraphicsModConfig* mod)
+{
+  for (u32 i = 0; i < mod->m_group_count; i++)
+  {
+    ClearTargets(&mod->m_groups[i]);
+    std::free(mod->m_groups[i].m_targets);
+    std::free(mod->m_groups[i].m_name);
+  }
+  mod->m_group_count = 0;
+}
+
+void ClearFeatures(GraphicsModConfig* mod)
+{
+  for (u32 i = 0; i < mod->m_feature_count; i++)
+  {
+    std::free(mod->m_features[i].m_group);
+    std::free(mod->m_features[i].m_action);
+  }
+  mod->m_feature_count = 0;
+}
+
+void ClearMods(GraphicsModList* list)
+{
+  for (u32 i = 0; i < list->count; i++)
+    FreeGraphicsModConfig(&list->mods[i]);
+  list->count = 0;
+}
+
 int ReadFile(void* buf, int len, void* user)
 {
   return static_cast<int>(filestream_read(static_cast<RFILE*>(user), buf, len));
@@ -82,6 +156,20 @@ std::string_view Text(rjson_t* json)
   return std::string_view(s, len);
 }
 
+// The current string, copied; false when out of memory
+bool CopyText(rjson_t* json, char** out)
+{
+  const std::string_view text = Text(json);
+  char* const copy = static_cast<char*>(std::malloc(text.size() + 1));
+  if (!copy)
+    return false;
+  std::memcpy(copy, text.data(), text.size());
+  copy[text.size()] = '\0';
+  std::free(*out);
+  *out = copy;
+  return true;
+}
+
 /* The current member name's index in names, or -1. */
 int Key(rjson_t* json, const char* const* names, int n)
 {
@@ -99,22 +187,18 @@ bool ReadField(rjson_t* json, enum rjson_type t, GraphicsTargetField* field)
   if (t == RJSON_STRING)
   {
     field->kind = GraphicsTargetField::Kind::String;
-    field->text = Text(json);
-    return true;
+    return CopyText(json, &field->text);
   }
+  FreeGraphicsTargetField(field);
   field->kind = GraphicsTargetField::Kind::Other;
-  field->text.clear();
   return Skip(json, t);
 }
 
 /* A string member into out, or false with what it was logged. */
-bool ReadString(rjson_t* json, enum rjson_type t, std::string* out, std::string_view what)
+bool ReadString(rjson_t* json, enum rjson_type t, char** out, std::string_view what)
 {
   if (t == RJSON_STRING)
-  {
-    *out = Text(json);
-    return true;
-  }
+    return CopyText(json, out);
   ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified %.*s is not a string",
             static_cast<int>(what.size()), what.data());
   Skip(json, t);
@@ -134,44 +218,55 @@ bool ReadArray(rjson_t* json, F read)
   return true;
 }
 
-/* { "title": ..., "author": ..., "description": ... } after its '{' */
+/* { "title": ..., ... } after its '{'; the author and description are not used */
 bool ReadMeta(rjson_t* json, GraphicsModConfig* mod)
 {
-  static const char* const names[] = {"title", "author", "description"};
-  std::string* const fields[] = {&mod->m_title, &mod->m_author, &mod->m_description};
+  static const char* const names[] = {"title"};
   enum rjson_type t;
   while ((t = rjson_next(json)) == RJSON_STRING)
   {
-    const int k = Key(json, names, 3);
+    const int k = Key(json, names, 1);
     t = rjson_next(json);
-    if (k >= 0 && t == RJSON_STRING)
-      *fields[k] = Text(json);
+    if (k == 0 && t == RJSON_STRING)
+    {
+      if (!CopyText(json, &mod->m_title))
+        return false;
+    }
     else if (!Skip(json, t))
+    {
       return false;
+    }
   }
   return t == RJSON_OBJECT_END;
 }
 
 /* { "type": ..., "texture_filename": ..., "value": ... } after its '{' */
-bool ReadTarget(rjson_t* json, std::vector<GraphicsTargetConfig>* targets)
+bool ReadTarget(rjson_t* json, GraphicsTargetGroupConfig* group)
 {
   static const char* const names[] = {"type", "texture_filename", "value"};
-  GraphicsTargetField fields[3];
+  GraphicsTargetField fields[3] = {};
   enum rjson_type t;
-  while ((t = rjson_next(json)) == RJSON_STRING)
+  bool ok = true;
+  while (ok && (t = rjson_next(json)) == RJSON_STRING)
   {
     const int k = Key(json, names, 3);
     t = rjson_next(json);
-    if (!(k >= 0 ? ReadField(json, t, &fields[k]) : Skip(json, t)))
-      return false;
+    ok = k >= 0 ? ReadField(json, t, &fields[k]) : Skip(json, t);
   }
-  if (t != RJSON_OBJECT_END)
-    return false;
-  GraphicsTargetConfig target;
-  if (!MakeTarget(fields[0], fields[1], fields[2], &target))
-    return false;
-  targets->push_back(std::move(target));
-  return true;
+  ok = ok && t == RJSON_OBJECT_END;
+  if (ok)
+  {
+    GraphicsTargetConfig* const target = AddTarget(group);
+    if (!target || !MakeTarget(fields[0], fields[1], fields[2], target))
+    {
+      if (target)
+        FreeGraphicsTarget(&group->m_targets[--group->m_target_count]);
+      ok = false;
+    }
+  }
+  for (u32 i = 0; i < 3; i++)
+    FreeGraphicsTargetField(&fields[i]);
+  return ok;
 }
 
 /* { "name": ..., "targets": [...] } after its '{' */
@@ -197,7 +292,7 @@ bool ReadGroup(rjson_t* json, GraphicsTargetGroupConfig* group)
             "Failed to load mod configuration file, specified group's targets is not an array");
         return false;
       }
-      group->m_targets.clear();
+      ClearTargets(group);
       if (!ReadArray(json, [&](enum rjson_type e) {
             if (e != RJSON_OBJECT)
             {
@@ -205,7 +300,7 @@ bool ReadGroup(rjson_t* json, GraphicsTargetGroupConfig* group)
                                "is not a json object");
               return false;
             }
-            return ReadTarget(json, &group->m_targets);
+            return ReadTarget(json, group);
           }))
       {
         return false;
@@ -269,14 +364,16 @@ bool ReadFeature(rjson_t* json, GraphicsModFeatureConfig* feature)
   return t == RJSON_OBJECT_END;
 }
 
-/* An array member of objects, each through read into a new element of out. */
-template <typename T, typename F>
-bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::string_view what,
-                 F read)
+/* An array member of objects, each through read into the element add makes; clear empties the
+ * list first. A failed element stays, for the mod's free. */
+template <typename T>
+bool ReadObjects(rjson_t* json, enum rjson_type t, GraphicsModConfig* mod,
+                 void (*clear)(GraphicsModConfig*), T* (*add)(GraphicsModConfig*),
+                 std::string_view what, bool (*read)(rjson_t*, T*))
 {
   if (t != RJSON_ARRAY)
     return Skip(json, t);
-  out->clear();
+  clear(mod);
   return ReadArray(json, [&](enum rjson_type e) {
     if (e != RJSON_OBJECT)
     {
@@ -284,11 +381,8 @@ bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::str
                 static_cast<int>(what.size()), what.data());
       return false;
     }
-    T item;
-    if (!read(json, &item))
-      return false;
-    out->push_back(std::move(item));
-    return true;
+    T* const item = add(mod);
+    return item && read(json, item);
   });
 }
 
@@ -310,10 +404,10 @@ bool ReadConfig(rjson_t* json, GraphicsModConfig* mod)
       ok = t == RJSON_OBJECT ? ReadMeta(json, mod) : Skip(json, t);
       break;
     case 1:
-      ok = ReadObjects(json, t, &mod->m_groups, "group", ReadGroup);
+      ok = ReadObjects(json, t, mod, ClearGroups, AddGroup, "group", ReadGroup);
       break;
     case 2:
-      ok = ReadObjects(json, t, &mod->m_features, "feature", ReadFeature);
+      ok = ReadObjects(json, t, mod, ClearFeatures, AddFeature, "feature", ReadFeature);
       break;
     default:
       ok = Skip(json, t);
@@ -336,20 +430,21 @@ bool Count(rjson_t* json, long* n)
 }
 
 /* A profile's mod entry after its '{': the mod it names, into mods where it loads. */
-bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
+bool ReadProfileMod(rjson_t* json, GraphicsModList* mods)
 {
   static const char* const names[] = {"source", "path", "groups", "features", "enabled",
                                       "weight"};
-  GraphicsTargetField source, path;
+  GraphicsTargetField source = {};
+  GraphicsTargetField path = {};
   long groups = -1, features = -1;
   bool has_enabled = false, enabled = false;
   bool has_weight = false;
   double weight = 0;
   enum rjson_type t;
+  bool ok = true;
   while ((t = rjson_next(json)) == RJSON_STRING)
   {
     const int k = Key(json, names, 6);
-    bool ok = true;
     t = rjson_next(json);
     switch (k)
     {
@@ -383,44 +478,48 @@ bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
       break;
     }
     if (!ok)
-      return false;
+      break;
   }
-  if (t != RJSON_OBJECT_END)
-    return false;
+  bool read = ok && t == RJSON_OBJECT_END;
 
-  if (source.kind == GraphicsTargetField::Kind::Absent ||
-      path.kind != GraphicsTargetField::Kind::String)
+  if (read && source.kind != GraphicsTargetField::Kind::Absent &&
+      path.kind == GraphicsTargetField::Kind::String)
   {
-    return true;
+    GraphicsModConfig* const mod = AddGraphicsMod(mods);
+    const bool is_system =
+        source.kind == GraphicsTargetField::Kind::String && !std::strcmp(source.text, "system");
+    const bool created =
+        mod &&
+        (is_system ? GraphicsModConfig::Create(File::GetSysDirectory() +
+                                                   DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR + path.text,
+                                               GraphicsModConfig::Source::System, mod) :
+                     GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
+                                               GraphicsModConfig::Source::User, mod));
+    if (!created)
+    {
+      if (mod)
+        FreeGraphicsModConfig(&mods->mods[--mods->count]);
+    }
+    else if ((groups < 0 || static_cast<u32>(groups) == mod->m_group_count) &&
+             (features < 0 || static_cast<u32>(features) == mod->m_feature_count))
+    {
+      if (has_enabled)
+        mod->m_enabled = enabled;
+      if (has_weight)
+        mod->m_weight = static_cast<u16>(weight);
+    }
   }
-  GraphicsModConfig mod;
-  const bool created =
-      source.kind == GraphicsTargetField::Kind::String && source.text == "system" ?
-          GraphicsModConfig::Create(File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR +
-                                        path.text,
-                                    GraphicsModConfig::Source::System, &mod) :
-          GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
-                                    GraphicsModConfig::Source::User, &mod);
-  if (!created)
-    return true;
-  if ((groups < 0 || static_cast<size_t>(groups) == mod.m_groups.size()) &&
-      (features < 0 || static_cast<size_t>(features) == mod.m_features.size()))
-  {
-    if (has_enabled)
-      mod.m_enabled = enabled;
-    if (has_weight)
-      mod.m_weight = static_cast<u16>(weight);
-  }
-  mods->push_back(std::move(mod));
-  return true;
+  FreeGraphicsTargetField(&source);
+  FreeGraphicsTargetField(&path);
+  return read;
 }
 }  // namespace
 
 bool GraphicsModConfig::Create(const std::string& file_path, Source source,
                                GraphicsModConfig* config)
 {
+  FreeGraphicsModConfig(config);
   GraphicsModConfig& result = *config;
-  result = GraphicsModConfig{};
   {
     Document doc(file_path);
     if (!doc.json)
@@ -447,7 +546,7 @@ bool GraphicsModConfig::Create(const std::string& file_path, Source source,
           file_path.c_str(), base_path.c_str());
       return false;
     }
-    result.m_relative_path = file_path.substr(base_path.size());
+    result.m_relative_path = strdup(file_path.c_str() + base_path.size());
   }
   else
   {
@@ -460,10 +559,10 @@ bool GraphicsModConfig::Create(const std::string& file_path, Source source,
           file_path.c_str(), base_path.c_str());
       return false;
     }
-    result.m_relative_path = file_path.substr(base_path.size());
+    result.m_relative_path = strdup(file_path.c_str() + base_path.size());
   }
 
-  return true;
+  return result.m_relative_path != nullptr;
 }
 
 std::string GraphicsModConfig::GetAbsolutePath() const
@@ -471,15 +570,42 @@ std::string GraphicsModConfig::GetAbsolutePath() const
   if (m_source == Source::System)
   {
     return WithUnifiedPathSeparators(File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR +
-                                     m_relative_path);
+                                     (m_relative_path ? m_relative_path : ""));
   }
   else
   {
-    return WithUnifiedPathSeparators(File::GetUserPath(D_GRAPHICSMOD_IDX) + m_relative_path);
+    return WithUnifiedPathSeparators(File::GetUserPath(D_GRAPHICSMOD_IDX) +
+                                     (m_relative_path ? m_relative_path : ""));
   }
 }
 
-bool LoadGraphicsModProfile(const std::string& file_path, std::vector<GraphicsModConfig>* mods_out)
+void FreeGraphicsModConfig(GraphicsModConfig* config)
+{
+  ClearGroups(config);
+  ClearFeatures(config);
+  std::free(config->m_groups);
+  std::free(config->m_features);
+  std::free(config->m_title);
+  std::free(config->m_relative_path);
+  std::memset(config, 0, sizeof(*config));
+}
+
+GraphicsModConfig* AddGraphicsMod(GraphicsModList* list)
+{
+  return static_cast<GraphicsModConfig*>(AddElement(reinterpret_cast<void**>(&list->mods),
+                                                    &list->count, &list->capacity,
+                                                    sizeof(GraphicsModConfig)));
+}
+
+void FreeGraphicsModList(GraphicsModList* list)
+{
+  ClearMods(list);
+  std::free(list->mods);
+  list->mods = nullptr;
+  list->capacity = 0;
+}
+
+bool LoadGraphicsModProfile(const std::string& file_path, GraphicsModList* mods_out)
 {
   Document doc(file_path);
   if (!doc.json)
@@ -500,8 +626,7 @@ bool LoadGraphicsModProfile(const std::string& file_path, std::vector<GraphicsMo
   }
 
   static const char* const names[] = {"mods"};
-  std::vector<GraphicsModConfig>& mods = *mods_out;
-  mods.clear();
+  GraphicsModList* const mods = mods_out;
   while ((t = rjson_next(doc.json)) == RJSON_STRING)
   {
     const int k = Key(doc.json, names, 1);
@@ -509,9 +634,9 @@ bool LoadGraphicsModProfile(const std::string& file_path, std::vector<GraphicsMo
     t = rjson_next(doc.json);
     if (k == 0 && t == RJSON_ARRAY)
     {
-      mods.clear();
+      ClearMods(mods);
       ok = ReadArray(doc.json, [&](enum rjson_type e) {
-        return e == RJSON_OBJECT ? ReadProfileMod(doc.json, &mods) : Skip(doc.json, e);
+        return e == RJSON_OBJECT ? ReadProfileMod(doc.json, mods) : Skip(doc.json, e);
       });
     }
     else
