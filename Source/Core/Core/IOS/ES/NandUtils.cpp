@@ -89,6 +89,12 @@ static bool IsValidPartOfTitleID(const std::string& string)
   return true;
 }
 
+static bool IsDirectory(FS::FileSystem* fs, const char* path)
+{
+  const FS::Result<FS::Metadata> metadata = fs->GetMetadata(PID_KERNEL, PID_KERNEL, path);
+  return metadata && !metadata->is_file;
+}
+
 static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir,
                                         ESCore::TitleVisitor visit, void* context)
 {
@@ -115,9 +121,8 @@ static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& t
     {
       if (!IsValidPartOfTitleID(title_identifier))
         continue;
-      if (!fs->ReadDirectory(
-              PID_KERNEL, PID_KERNEL,
-              StringFromFormat("%s/%s", title_dir.c_str(), title_identifier.c_str()).c_str()))
+      if (!IsDirectory(
+              fs, StringFromFormat("%s/%s", title_dir.c_str(), title_identifier.c_str()).c_str()))
       {
         continue;
       }
@@ -186,8 +191,8 @@ void ESCore::ForEachTitleWithTicket(TitleVisitor visit, void* context) const
     for (const std::string& file_name : *sub_entries)
     {
       const std::string name_without_ext = file_name.substr(0, 8);
-      if (fs->ReadDirectory(
-              PID_KERNEL, PID_KERNEL,
+      if (IsDirectory(
+              fs,
               StringFromFormat("/ticket/%s/%s", title_type.c_str(), file_name.c_str()).c_str()) ||
           !IsValidPartOfTitleID(name_without_ext) ||
           (name_without_ext + ".tik" != file_name && name_without_ext + ".tv1" != file_name))
@@ -264,8 +269,8 @@ u32 ESCore::GetSharedContentsCount() const
   u32 count = 0;
   for (const std::string& entry : *entries)
   {
-    if (!m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, ("/shared1/" + entry).c_str()) &&
-        entry.size() == 12 && entry.compare(8, 4, ".app") == 0)
+    if (!IsDirectory(m_ios.GetFS(), ("/shared1/" + entry).c_str()) && entry.size() == 12 &&
+        entry.compare(8, 4, ".app") == 0)
     {
       ++count;
     }
@@ -323,10 +328,12 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
   }
 
   const std::string data_dir = Common::GetTitleDataPath(title_id);
-  const auto data_dir_contents = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str());
-  if (!data_dir_contents && (data_dir_contents.error() != FS::ResultCode::NotFound ||
-                             fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str(), 0,
-                                                 data_dir_modes) != FS::ResultCode::Success))
+  const FS::Result<FS::Metadata> data_dir_metadata =
+      fs->GetMetadata(PID_KERNEL, PID_KERNEL, data_dir.c_str());
+  if (data_dir_metadata ? data_dir_metadata->is_file :
+                          data_dir_metadata.error() != FS::ResultCode::NotFound ||
+                              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str(), 0,
+                                                  data_dir_modes) != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "Failed to create data dir for %016" PRIx64, (u64)title_id);
     return false;
@@ -412,7 +419,7 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
     const std::string absolute_path =
         StringFromFormat("%s/%s", import_content_dir.c_str(), name.c_str());
     // There should not be any directory in there. Remove it.
-    if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, absolute_path.c_str()))
+    if (IsDirectory(fs, absolute_path.c_str()))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
     else if (!IsExpectedImportEntry(name.c_str(), tmd))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
