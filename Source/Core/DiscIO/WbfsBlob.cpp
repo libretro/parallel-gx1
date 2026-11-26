@@ -27,8 +27,13 @@ WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const char* path) : m_si
 {
   if (!AddFileToList(std::move(file)))
     return;
-  if (path && *path)
+  if (*path)
     OpenAdditionalFiles(path);
+  Init();
+}
+
+void WbfsFileReader::Init()
+{
   if (!ReadHeader())
     return;
 
@@ -51,9 +56,11 @@ WbfsFileReader::~WbfsFileReader()
 
 BlobReader* WbfsFileReader::CopyReader() const
 {
-  WbfsFileReader* retval = new WbfsFileReader(m_files[0].file);
-  for (size_t ix = 1; ix < m_file_count; ix++)
+  // with all the parts before the header is checked against their size
+  WbfsFileReader* retval = new WbfsFileReader();
+  for (size_t ix = 0; ix < m_file_count; ix++)
     retval->AddFileToList(m_files[ix].file);
+  retval->Init();
   return retval;
 }
 

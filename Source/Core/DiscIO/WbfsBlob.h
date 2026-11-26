@@ -35,8 +35,11 @@ public:
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
-  // path names the .wbfs file for its parts; none are opened when it is null
-  WbfsFileReader(File::DirectIOFile file, const char* path = nullptr);
+  // path names the .wbfs file for its parts
+  WbfsFileReader(File::DirectIOFile file, const char* path);
+  WbfsFileReader() : m_size(0), m_good(false) {}
+  // reads the header and the cluster table once the parts are in the list
+  void Init();
 
   void OpenAdditionalFiles(const char* path);
   bool AddFileToList(File::DirectIOFile file);
