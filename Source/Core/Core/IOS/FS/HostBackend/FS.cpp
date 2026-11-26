@@ -372,7 +372,15 @@ void FileSystem::DoState(PointerWrap& p)
   //    of them were open, it would make DoStateRead/DoStateWriteOrMeasure's calls to OpenFile fail.
   // 4. Create a copy of m_handles that we can restore later in case we're writing/measuring,
   //    because OpenFile happily stomps over elements in m_handles that have opened set to false.
-  Handle handles_copy[NUM_HANDLES];
+  // The copy and the buffer for file contents are far too big for the stack.
+  Handle* const handles_copy =
+      static_cast<Handle*>(std::malloc(sizeof(Handle) * NUM_HANDLES + STATE_CHUNK_SIZE));
+  if (!handles_copy)
+  {
+    p.SetVerifyMode();
+    return;
+  }
+  u8* const buffer = reinterpret_cast<u8*>(handles_copy + NUM_HANDLES);
   int i;
   for (i = 0; i < NUM_HANDLES; i++)
   {
@@ -388,27 +396,20 @@ void FileSystem::DoState(PointerWrap& p)
   bool is_full_nand_in_state = false;
   p.Do(is_full_nand_in_state);
   u32 size_of_nand = 0;
-  const bool is_reading = p.IsReadMode();
-  u8* const buffer = static_cast<u8*>(std::malloc(STATE_CHUNK_SIZE));
-  if (!buffer)
-    p.SetVerifyMode();
-
-  if (!is_reading)
+  if (!p.IsReadMode())
   {
-    if (buffer)
-      DoStateWriteOrMeasure(p, "/tmp", buffer);
+    DoStateWriteOrMeasure(p, "/tmp", buffer);
     p.Do(size_of_nand);
 
     for (i = 0; i < NUM_HANDLES; i++)
-      m_handles[i] = std::move(handles_copy[i]);
+      m_handles[i] = handles_copy[i];
   }
   else
   {
-    if (buffer)
-      DoStateRead(p, "/tmp", buffer);
+    DoStateRead(p, "/tmp", buffer);
     (void)p.DoExternal(size_of_nand);
   }
-  std::free(buffer);
+  std::free(handles_copy);
 
   for (i = 0; i < NUM_HANDLES; i++)
   {
