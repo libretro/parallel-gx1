@@ -271,8 +271,6 @@ void CheckForConfigChanges()
   const auto old_texture_filtering_mode = g_ActiveConfig.texture_filtering_mode;
   const bool old_bbox = g_ActiveConfig.bBBoxEnable;
   const int old_efb_scale = g_ActiveConfig.iEFBScale;
-  const u32 old_game_mod_changes =
-      g_ActiveConfig.graphics_mod_config ? g_ActiveConfig.graphics_mod_config->GetChangeCount() : 0;
   const bool old_graphics_mods_enabled = g_ActiveConfig.bGraphicMods;
   const AspectMode old_aspect_mode = g_ActiveConfig.aspect_mode;
   const AspectMode old_suggested_aspect_mode = g_ActiveConfig.suggested_aspect_mode;
@@ -284,16 +282,7 @@ void CheckForConfigChanges()
 
 
   if (g_ActiveConfig.bGraphicMods && !old_graphics_mods_enabled)
-  {
-    g_ActiveConfig.graphics_mod_config = GraphicsModGroupConfig(SConfig::GetInstance().GetGameID());
-    g_ActiveConfig.graphics_mod_config->Load();
-  }
-
-  if (g_ActiveConfig.graphics_mod_config &&
-      (old_game_mod_changes != g_ActiveConfig.graphics_mod_config->GetChangeCount()))
-  {
-    g_graphics_mod_manager->Load(*g_ActiveConfig.graphics_mod_config);
-  }
+    g_graphics_mod_manager->LoadGameMods();
 
   // Update texture cache settings with any changed options.
   g_texture_cache->OnConfigChanged(g_ActiveConfig);

@@ -9,12 +9,10 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.h"
 #include "VideoCommon/VideoCommon.h"
 
 constexpr int EFB_SCALE_AUTO_INTEGRAL = 0;
@@ -250,7 +248,6 @@ struct VideoConfig final
   bool bEnableGPUTextureDecoding = false;
   bool bPreferVSForLinePointExpansion = false;
   bool bGraphicMods = false;
-  std::optional<GraphicsModGroupConfig> graphics_mod_config;
 
   // Hacks
   bool bEFBAccessEnable = false;

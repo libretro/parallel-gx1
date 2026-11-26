@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -76,22 +77,17 @@ private:
 bool GraphicsModManager::Initialize()
 {
   if (g_ActiveConfig.bGraphicMods)
-  {
-    // If a config change occurred in a previous session,
-    // remember the old change count value.  By setting
-    // our current change count to the old value, we
-    // avoid loading the stale data when we
-    // check for config changes.
-    const u32 old_game_mod_changes = g_ActiveConfig.graphics_mod_config ?
-                                         g_ActiveConfig.graphics_mod_config->GetChangeCount() :
-                                         0;
-    g_ActiveConfig.graphics_mod_config = GraphicsModGroupConfig(SConfig::GetInstance().GetGameID());
-    g_ActiveConfig.graphics_mod_config->Load();
-    g_ActiveConfig.graphics_mod_config->SetChangeCount(old_game_mod_changes);
-    g_graphics_mod_manager->Load(*g_ActiveConfig.graphics_mod_config);
-  }
+    LoadGameMods();
 
   return true;
+}
+
+void GraphicsModManager::LoadGameMods()
+{
+  // The actions copy what they need, so the config goes once they are made.
+  GraphicsModGroupConfig config(SConfig::GetInstance().GetGameID());
+  config.Load();
+  Load(config);
 }
 
 GraphicsModManager::~GraphicsModManager()

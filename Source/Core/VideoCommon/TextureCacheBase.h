@@ -609,7 +609,6 @@ private:
     bool disable_vram_copies;
     bool arbitrary_mipmap_detection;
     bool graphics_mods;
-    u32 graphics_mod_change_count;
   };
   BackupConfig m_backup_config = {};
 

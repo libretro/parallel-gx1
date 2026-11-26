@@ -3,7 +3,6 @@
 
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.h"
 
-#include <map>
 #include <string>
 #include <utility>
 
@@ -22,15 +21,6 @@ GraphicsModGroupConfig::GraphicsModGroupConfig(std::string game_id) : m_game_id(
 }
 
 GraphicsModGroupConfig::~GraphicsModGroupConfig() = default;
-
-GraphicsModGroupConfig::GraphicsModGroupConfig(const GraphicsModGroupConfig&) = default;
-
-GraphicsModGroupConfig::GraphicsModGroupConfig(GraphicsModGroupConfig&&) noexcept = default;
-
-GraphicsModGroupConfig& GraphicsModGroupConfig::operator=(const GraphicsModGroupConfig&) = default;
-
-GraphicsModGroupConfig&
-GraphicsModGroupConfig::operator=(GraphicsModGroupConfig&&) noexcept = default;
 
 void GraphicsModGroupConfig::Load()
 {
@@ -92,22 +82,6 @@ void GraphicsModGroupConfig::Load()
     for (size_t j = i; j > 0 && m_graphics_mods[j - 1].m_weight > m_graphics_mods[j].m_weight; j--)
       std::swap(m_graphics_mods[j - 1], m_graphics_mods[j]);
   }
-  for (auto& mod : m_graphics_mods)
-  {
-    m_path_to_graphics_mod[mod.GetAbsolutePath()] = &mod;
-  }
-
-  m_change_count++;
-}
-
-void GraphicsModGroupConfig::SetChangeCount(u32 change_count)
-{
-  m_change_count = change_count;
-}
-
-u32 GraphicsModGroupConfig::GetChangeCount() const
-{
-  return m_change_count;
 }
 
 const std::vector<GraphicsModConfig>& GraphicsModGroupConfig::GetMods() const

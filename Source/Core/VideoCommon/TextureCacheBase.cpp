@@ -569,9 +569,6 @@ void TextureCacheBase::OnConfigChanged(const VideoConfig& config)
     HiresTexture::Update();
   }
 
-  const u32 change_count =
-      config.graphics_mod_config ? config.graphics_mod_config->GetChangeCount() : 0;
-
   // TODO: Invalidating texcache is really stupid in some of these cases
   if (config.iSafeTextureCache_ColorSamples != m_backup_config.color_samples ||
       config.bTexFmtOverlayEnable != m_backup_config.texfmt_overlay ||
@@ -580,8 +577,7 @@ void TextureCacheBase::OnConfigChanged(const VideoConfig& config)
       config.bEnableGPUTextureDecoding != m_backup_config.gpu_texture_decoding ||
       config.bDisableCopyToVRAM != m_backup_config.disable_vram_copies ||
       config.bArbitraryMipmapDetection != m_backup_config.arbitrary_mipmap_detection ||
-      config.bGraphicMods != m_backup_config.graphics_mods ||
-      change_count != m_backup_config.graphics_mod_change_count)
+      config.bGraphicMods != m_backup_config.graphics_mods)
   {
     Invalidate();
     TexDecoder_SetTexFmtOverlayOptions(config.bTexFmtOverlayEnable, config.bTexFmtOverlayCenter);
@@ -675,8 +671,6 @@ void TextureCacheBase::SetBackupConfig(const VideoConfig& config)
   m_backup_config.disable_vram_copies = config.bDisableCopyToVRAM;
   m_backup_config.arbitrary_mipmap_detection = config.bArbitraryMipmapDetection;
   m_backup_config.graphics_mods = config.bGraphicMods;
-  m_backup_config.graphics_mod_change_count =
-      config.graphics_mod_config ? config.graphics_mod_config->GetChangeCount() : 0;
 }
 
 bool TextureCacheBase::DidLinkedAssetsChange(const TCacheEntry& entry)

@@ -34,6 +34,8 @@ public:
   GraphicsModActionList GetEFBActions(const FBInfo& efb) const;
 
   void Load(const GraphicsModGroupConfig& config);
+  // Loads the mods of the running game.
+  void LoadGameMods();
 
 private:
   void Reset();
