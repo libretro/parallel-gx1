@@ -157,6 +157,8 @@ bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType
 
   SysConf sysconf{ios.GetFS()};
   SysConf::Entry* tid_entry = sysconf.GetOrAddEntry("IPL.TID", SysConf::Entry::Type::LongLong);
+  if (!tid_entry)
+    return false;
   const u64 previous_temporary_title_id = Common::swap64(tid_entry->GetData<u64>(0));
   const u64 title_id = wad.GetTMD().GetTitleId();
 

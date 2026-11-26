@@ -26,8 +26,7 @@ void BackUpBTInfoSection(const SysConf* sysconf)
   if (!btdinf)
     return;
 
-  const std::vector<u8>& section = btdinf->bytes;
-  if (!backup.WriteBytes(section.data(), section.size()))
+  if (!backup.WriteBytes(btdinf->bytes, btdinf->size))
     ERROR_LOG(IOS_WIIMOTE, "Failed to back up BT.DINF section");
 }
 
@@ -38,8 +37,9 @@ void RestoreBTInfoSection(SysConf* sysconf)
     File::IOFile backup(filename, "rb");
     if (!backup)
       return;
-    auto& section = sysconf->GetOrAddEntry("BT.DINF", SysConf::Entry::Type::BigArray)->bytes;
-    if (!backup.ReadBytes(section.data(), section.size()))
+    SysConf::Entry* const section =
+        sysconf->GetOrAddEntry("BT.DINF", SysConf::Entry::Type::BigArray);
+    if (!section || !backup.ReadBytes(section->bytes, section->size))
     {
       ERROR_LOG(IOS_WIIMOTE, "Failed to read backed up BT.DINF section");
       return;

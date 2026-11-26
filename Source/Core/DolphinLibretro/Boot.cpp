@@ -15,6 +15,7 @@
 #include <vfs/vfs_hybrid.h>
 #include "Common/CommonPaths.h"
 #include "Common/FileUtil.h"
+#include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/Version.h"
