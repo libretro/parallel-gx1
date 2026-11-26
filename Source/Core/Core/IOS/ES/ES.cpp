@@ -842,15 +842,17 @@ static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& t
       return ES_EIO;
   }
 
-  const std::string tmd_dir = Common::GetTitleContentPath(tmd.GetTitleId());
-  const std::string tmd_path = Common::GetTMDFileName(tmd.GetTitleId());
+  char tmd_dir[Common::NAND_PATH_SIZE];
+  char tmd_path[Common::NAND_PATH_SIZE];
+  Common::GetTitleContentPath(tmd.GetTitleId(), tmd_dir, sizeof(tmd_dir));
+  Common::GetTMDFileName(tmd.GetTitleId(), tmd_path, sizeof(tmd_path));
   constexpr FS::Modes parent_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read};
-  const auto result = fs->CreateFullPath(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), 0, parent_modes);
+  const auto result = fs->CreateFullPath(PID_KERNEL, PID_KERNEL, tmd_path, 0, parent_modes);
   if (result != FS::ResultCode::Success)
     return FS::ConvertResult(result);
 
-  fs->SetMetadata(PID_KERNEL, tmd_dir.c_str(), PID_KERNEL, PID_KERNEL, 0, internal_modes);
-  return FS::ConvertResult(fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), tmd_path.c_str()));
+  fs->SetMetadata(PID_KERNEL, tmd_dir, PID_KERNEL, PID_KERNEL, 0, internal_modes);
+  return FS::ConvertResult(fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), tmd_path));
 }
 
 ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& ticket)
@@ -887,11 +889,12 @@ ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& 
     return ES_SHORT_READ;
   }
 
-  const std::string data_dir = Common::GetTitleDataPath(tmd.GetTitleId());
+  char data_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataPath(tmd.GetTitleId(), data_dir, sizeof(data_dir));
   // Might already exist, so we only need to check whether the second operation succeeded.
   constexpr FS::Modes data_dir_modes{FS::Mode::ReadWrite, FS::Mode::None, FS::Mode::None};
-  fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str(), 0, data_dir_modes);
-  return FS::ConvertResult(fs->SetMetadata(0, data_dir.c_str(), kernel.GetUidForPPC(),
+  fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0, data_dir_modes);
+  return FS::ConvertResult(fs->SetMetadata(0, data_dir, kernel.GetUidForPPC(),
                                            kernel.GetGidForPPC(), 0, data_dir_modes));
 }
 

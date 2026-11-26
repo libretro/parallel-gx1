@@ -165,13 +165,19 @@ void BackupWiiSettings()
   // during emulation, since the config system will restore the SYSCONF settings at emulation end.
   // For setting.txt, there is no other code that restores the original values for us.
 
-  BackupFile(Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/" WII_SETTING);
+  char settings_file_path[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, WII_SETTING, settings_file_path,
+                               sizeof(settings_file_path));
+  BackupFile(settings_file_path);
   BackupFile("/shared2/sys/SYSCONF");
 }
 
 void RestoreWiiSettings(RestoreReason reason)
 {
-  RestoreFile(Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/" WII_SETTING);
+  char settings_file_path[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, WII_SETTING, settings_file_path,
+                               sizeof(settings_file_path));
+  RestoreFile(settings_file_path);
 
   // We must not restore the SYSCONF backup when ending emulation cleanly, since the user may have
   // edited the SYSCONF file in the NAND using the emulated software (e.g. the Wii Menu settings).
@@ -265,8 +271,11 @@ static bool CopySaveBack(u64 title_id, void* context)
   WiiSave::Storage* const session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
 
   // FS won't write the save if the directory doesn't exist
-  const std::string title_path = Common::GetTitleDataPath(title_id);
-  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, (title_path + '/').c_str(), 0,
+  char title_path[Common::NAND_PATH_SIZE];
+  char title_path_slash[Common::NAND_PATH_SIZE + 1];
+  Common::GetTitleDataPath(title_id, title_path, sizeof(title_path));
+  std::snprintf(title_path_slash, sizeof(title_path_slash), "%s/", title_path);
+  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path_slash, 0,
                                 {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
 
   WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);
@@ -302,8 +311,8 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   FS::FileSystem* const configured_fs = FS::MakeFileSystem(FS::Location::Configured);
 
   // Copy back Mii data
-  if (!CopyNandFile(ios->GetFS(), Common::GetMiiDatabasePath(), configured_fs,
-                    Common::GetMiiDatabasePath()))
+  if (!CopyNandFile(ios->GetFS(), Common::MII_DATABASE_PATH, configured_fs,
+                    Common::MII_DATABASE_PATH))
   {
     WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
   }

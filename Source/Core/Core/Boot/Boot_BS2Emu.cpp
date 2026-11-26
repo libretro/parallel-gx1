@@ -363,13 +363,14 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   std::string serno;
   std::string model = "RVL-001(" + region_setting.area + ")";
   CreateSystemMenuTitleDirs();
-  const std::string settings_file_path(Common::GetTitleDataPath(Titles::SYSTEM_MENU) +
-                                       "/" WII_SETTING);
+  char settings_file_path[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, WII_SETTING, settings_file_path,
+                               sizeof(settings_file_path));
 
   const auto fs = system.GetIOS()->GetFS();
   {
     Common::SettingsBuffer data;
-    const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str(),
+    const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path,
                                    IOS::HLE::FS::Mode::Read);
     if (file && file->Read(data, sizeof(data)))
     {
@@ -403,7 +404,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
       }
     }
   }
-  fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str());
+  fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path);
 
   if (serno.empty() || serno == "000000000")
   {
@@ -429,8 +430,8 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   settings_writer.AddSetting("GAME", region_setting.game);
 
   constexpr IOS::HLE::FS::Mode rw_mode = IOS::HLE::FS::Mode::ReadWrite;
-  const auto settings_file = fs->CreateAndOpenFile(
-      IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str(), {rw_mode, rw_mode, rw_mode});
+  const auto settings_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
+                                                   settings_file_path, {rw_mode, rw_mode, rw_mode});
   if (!settings_file ||
       !settings_file->Write(settings_writer.GetBytes(), sizeof(Common::SettingsBuffer)))
   {
@@ -506,11 +507,12 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
 static void WriteEmptyPlayRecord()
 {
   CreateSystemMenuTitleDirs();
-  const std::string file_path = Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/play_rec.dat";
+  char file_path[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, "play_rec.dat", file_path, sizeof(file_path));
   const auto fs = Core::System::GetInstance().GetIOS()->GetFS();
   constexpr IOS::HLE::FS::Mode rw_mode = IOS::HLE::FS::Mode::ReadWrite;
-  const auto playrec_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
-                                                  file_path.c_str(), {rw_mode, rw_mode, rw_mode});
+  const auto playrec_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, file_path,
+                                                  {rw_mode, rw_mode, rw_mode});
   if (!playrec_file)
     return;
   std::vector<u8> empty_record(0x80);

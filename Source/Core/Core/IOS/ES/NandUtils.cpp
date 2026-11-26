@@ -21,9 +21,9 @@
 
 namespace IOS::HLE
 {
-static ES::TMDReader FindTMD(FSCore& fs, const std::string& tmd_path, Ticks ticks)
+static ES::TMDReader FindTMD(FSCore& fs, const char* tmd_path, Ticks ticks)
 {
-  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), FS::Mode::Read, ticks);
+  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path, FS::Mode::Read, ticks);
   if (fd.Get() < 0)
     return {};
 
@@ -39,20 +39,27 @@ static ES::TMDReader FindTMD(FSCore& fs, const std::string& tmd_path, Ticks tick
 
 ES::TMDReader ESCore::FindImportTMD(u64 title_id, Ticks ticks) const
 {
-  return FindTMD(m_ios.GetFSCore(), Common::GetImportTitlePath(title_id) + "/content/title.tmd",
-                 ticks);
+  char path[Common::NAND_PATH_SIZE];
+  std::snprintf(path, sizeof(path), "/import/%08x/%08x/content/title.tmd",
+                static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+  return FindTMD(m_ios.GetFSCore(), path, ticks);
 }
 
 ES::TMDReader ESCore::FindInstalledTMD(u64 title_id, Ticks ticks) const
 {
-  return FindTMD(m_ios.GetFSCore(), Common::GetTMDFileName(title_id), ticks);
+  char path[Common::NAND_PATH_SIZE];
+  Common::GetTMDFileName(title_id, path, sizeof(path));
+  return FindTMD(m_ios.GetFSCore(), path, ticks);
 }
 
 ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) const
 {
-  std::string path = desired_version == 1 ? Common::GetV1TicketFileName(title_id) :
-                                            Common::GetTicketFileName(title_id);
-  auto ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
+  char path[Common::NAND_PATH_SIZE];
+  if (desired_version == 1)
+    Common::GetV1TicketFileName(title_id, path, sizeof(path));
+  else
+    Common::GetTicketFileName(title_id, path, sizeof(path));
+  auto ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
   if (!ticket_file)
   {
     if (desired_version != ANY_TICKET_VERSION)
@@ -60,8 +67,8 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) con
       return {};
 
     // Check if we are dealing with a v1 ticket
-    path = Common::GetV1TicketFileName(title_id);
-    ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
+    Common::GetV1TicketFileName(title_id, path, sizeof(path));
+    ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
 
     if (!ticket_file)
       return {};
@@ -306,26 +313,30 @@ void ESCore::ForEachSharedContent(HashVisitor visit, void* context) const
   }
 }
 
-static bool DeleteDirectoriesIfEmpty(FS::FileSystem* fs, const std::string& path)
+// Deletes path if it is empty, then each of its parents in turn up to the top-level directory.
+static bool DeleteDirectoriesIfEmpty(FS::FileSystem* fs, const char* path)
 {
-  std::string::size_type position = std::string::npos;
-  do
+  char directory_path[Common::NAND_PATH_SIZE];
+  std::snprintf(directory_path, sizeof(directory_path), "%s", path);
+  for (;;)
   {
+    char* separator;
     FS::DirectoryList directory;
     const FS::ResultCode result =
-        fs->ReadDirectory(PID_KERNEL, PID_KERNEL, path.substr(0, position).c_str(), &directory);
+        fs->ReadDirectory(PID_KERNEL, PID_KERNEL, directory_path, &directory);
     const bool is_empty = directory.count == 0;
     FS::FreeDirectoryList(&directory);
     if ((result == FS::ResultCode::Success && is_empty) ||
         (result != FS::ResultCode::Success && result != FS::ResultCode::NotFound))
     {
-      if (fs->Delete(PID_KERNEL, PID_KERNEL, path.substr(0, position).c_str()) !=
-          FS::ResultCode::Success)
+      if (fs->Delete(PID_KERNEL, PID_KERNEL, directory_path) != FS::ResultCode::Success)
         return false;
     }
-    position = path.find_last_of('/', position - 1);
-  } while (position != 0);
-  return true;
+    separator = std::strrchr(directory_path, '/');
+    if (!separator || separator == directory_path)
+      return true;
+    *separator = '\0';
+  }
 }
 
 constexpr FS::Modes title_dir_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read};
@@ -336,11 +347,14 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
 {
   const auto fs = m_ios.GetFS();
 
-  const std::string content_dir = Common::GetTitleContentPath(title_id);
+  char content_dir[Common::NAND_PATH_SIZE];
+  char content_dir_slash[Common::NAND_PATH_SIZE + 1];
+  Common::GetTitleContentPath(title_id, content_dir, sizeof(content_dir));
+  std::snprintf(content_dir_slash, sizeof(content_dir_slash), "%s/", content_dir);
   const auto result1 =
-      fs->CreateFullPath(PID_KERNEL, PID_KERNEL, (content_dir + '/').c_str(), 0, title_dir_modes);
-  const auto result2 = fs->SetMetadata(PID_KERNEL, content_dir.c_str(), PID_KERNEL, PID_KERNEL, 0,
-                                       content_dir_modes);
+      fs->CreateFullPath(PID_KERNEL, PID_KERNEL, content_dir_slash, 0, title_dir_modes);
+  const auto result2 =
+      fs->SetMetadata(PID_KERNEL, content_dir, PID_KERNEL, PID_KERNEL, 0, content_dir_modes);
   if (result1 != FS::ResultCode::Success || result2 != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "Failed to create or set metadata on content dir for %016" PRIx64,
@@ -348,12 +362,13 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
     return false;
   }
 
-  const std::string data_dir = Common::GetTitleDataPath(title_id);
+  char data_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitleDataPath(title_id, data_dir, sizeof(data_dir));
   const FS::Result<FS::Metadata> data_dir_metadata =
-      fs->GetMetadata(PID_KERNEL, PID_KERNEL, data_dir.c_str());
+      fs->GetMetadata(PID_KERNEL, PID_KERNEL, data_dir);
   if (data_dir_metadata ? data_dir_metadata->is_file :
                           data_dir_metadata.error() != FS::ResultCode::NotFound ||
-                              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str(), 0,
+                              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0,
                                                   data_dir_modes) != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "Failed to create data dir for %016" PRIx64, (u64)title_id);
@@ -362,8 +377,7 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
 
   ES::UIDSys uid_sys{m_ios.GetFSCore()};
   const u32 uid = uid_sys.GetOrInsertUIDForTitle(title_id);
-  if (fs->SetMetadata(0, data_dir.c_str(), uid, group_id, 0, data_dir_modes) !=
-      FS::ResultCode::Success)
+  if (fs->SetMetadata(0, data_dir, uid, group_id, 0, data_dir_modes) != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "Failed to set metadata on data dir for %016" PRIx64, (u64)title_id);
     return false;
@@ -378,9 +392,15 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
     return false;
 
   const auto fs = m_ios.GetFS();
-  const std::string import_content_dir = Common::GetImportTitlePath(tmd.GetTitleId()) + "/content";
-  const auto result = fs->CreateFullPath(PID_KERNEL, PID_KERNEL, (import_content_dir + '/').c_str(),
-                                         0, content_dir_modes);
+  const u64 title_id = tmd.GetTitleId();
+  char import_content_dir[Common::NAND_PATH_SIZE];
+  char import_content_dir_slash[Common::NAND_PATH_SIZE + 1];
+  std::snprintf(import_content_dir, sizeof(import_content_dir), "/import/%08x/%08x/content",
+                static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+  std::snprintf(import_content_dir_slash, sizeof(import_content_dir_slash), "%s/",
+                import_content_dir);
+  const auto result =
+      fs->CreateFullPath(PID_KERNEL, PID_KERNEL, import_content_dir_slash, 0, content_dir_modes);
   if (result != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "InitImport: Failed to create content dir for %016" PRIx64,
@@ -389,14 +409,15 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
   }
 
   // IOS moves the title content directory to /import if the TMD exists during an import.
-  const auto file_info =
-      fs->GetMetadata(PID_KERNEL, PID_KERNEL, Common::GetTMDFileName(tmd.GetTitleId()).c_str());
+  char tmd_path[Common::NAND_PATH_SIZE];
+  Common::GetTMDFileName(title_id, tmd_path, sizeof(tmd_path));
+  const auto file_info = fs->GetMetadata(PID_KERNEL, PID_KERNEL, tmd_path);
   if (!file_info || !file_info->is_file)
     return true;
 
-  const std::string content_dir = Common::GetTitleContentPath(tmd.GetTitleId());
-  const auto rename_result =
-      fs->Rename(PID_KERNEL, PID_KERNEL, content_dir.c_str(), import_content_dir.c_str());
+  char content_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitleContentPath(title_id, content_dir, sizeof(content_dir));
+  const auto rename_result = fs->Rename(PID_KERNEL, PID_KERNEL, content_dir, import_content_dir);
   if (rename_result != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "InitImport: Failed to move content dir for %016" PRIx64,
@@ -429,11 +450,13 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
 {
   const auto fs = m_ios.GetFS();
   const u64 title_id = tmd.GetTitleId();
-  const std::string import_content_dir = Common::GetImportTitlePath(title_id) + "/content";
+  char import_content_dir[sizeof("/import/00000000/00000000/content")];
+  std::snprintf(import_content_dir, sizeof(import_content_dir), "/import/%08x/%08x/content",
+                static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
 
   // Remove everything not listed in the TMD.
   FS::DirectoryList entries;
-  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir.c_str(), &entries) !=
+  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir, &entries) !=
       FS::ResultCode::Success)
   {
     return false;
@@ -441,20 +464,22 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   for (u32 i = 0; i < entries.count; i++)
   {
     const char* const name = entries.names[i];
-    const std::string absolute_path = StringFromFormat("%s/%s", import_content_dir.c_str(), name);
+    char absolute_path[Common::NAND_PATH_SIZE];
+    std::snprintf(absolute_path, sizeof(absolute_path), "%s/%s", import_content_dir, name);
     // There should not be any directory in there. Remove it.
-    if (IsDirectory(fs, absolute_path.c_str()))
-      fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
+    if (IsDirectory(fs, absolute_path))
+      fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
     else if (!IsExpectedImportEntry(name, tmd))
-      fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
+      fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
   }
   FS::FreeDirectoryList(&entries);
 
-  const std::string content_dir = Common::GetTitleContentPath(title_id);
-  if (fs->Rename(PID_KERNEL, PID_KERNEL, import_content_dir.c_str(), content_dir.c_str()) !=
+  char content_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitleContentPath(title_id, content_dir, sizeof(content_dir));
+  if (fs->Rename(PID_KERNEL, PID_KERNEL, import_content_dir, content_dir) !=
       FS::ResultCode::Success)
   {
-    ERROR_LOG(IOS_ES, "FinishImport: Failed to rename import directory to %s", content_dir.c_str());
+    ERROR_LOG(IOS_ES, "FinishImport: Failed to rename import directory to %s", content_dir);
     return false;
   }
   return true;
@@ -463,20 +488,20 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
 bool ESCore::WriteImportTMD(const ES::TMDReader& tmd)
 {
   const auto fs = m_ios.GetFS();
-  const std::string tmd_path = "/tmp/title.tmd";
+  const char* const tmd_path = "/tmp/title.tmd";
   {
-    const auto file =
-        fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), content_dir_modes);
+    const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, tmd_path, content_dir_modes);
     size_t tmd_size;
     const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
     if (!file || !file->Write(tmd_bytes, tmd_size))
       return false;
   }
 
-  const std::string dest = StringFromFormat("%s/content/title.tmd",
-                                            Common::GetImportTitlePath(tmd.GetTitleId()).c_str());
-  return fs->Rename(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), dest.c_str()) ==
-         FS::ResultCode::Success;
+  const u64 title_id = tmd.GetTitleId();
+  char dest[Common::NAND_PATH_SIZE];
+  std::snprintf(dest, sizeof(dest), "/import/%08x/%08x/content/title.tmd",
+                static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+  return fs->Rename(PID_KERNEL, PID_KERNEL, tmd_path, dest) == FS::ResultCode::Success;
 }
 
 void ESCore::FinishStaleImport(u64 title_id)
@@ -485,9 +510,15 @@ void ESCore::FinishStaleImport(u64 title_id)
   const auto import_tmd = FindImportTMD(title_id);
   if (!import_tmd.IsValid())
   {
-    fs->Delete(PID_KERNEL, PID_KERNEL, (Common::GetImportTitlePath(title_id) + "/content").c_str());
-    DeleteDirectoriesIfEmpty(fs, Common::GetImportTitlePath(title_id));
-    DeleteDirectoriesIfEmpty(fs, Common::GetTitlePath(title_id));
+    char path[Common::NAND_PATH_SIZE];
+    char import_content_dir[sizeof("/import/00000000/00000000/content")];
+    Common::GetImportTitlePath(title_id, path, sizeof(path));
+    std::snprintf(import_content_dir, sizeof(import_content_dir), "/import/%08x/%08x/content",
+                  static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+    fs->Delete(PID_KERNEL, PID_KERNEL, import_content_dir);
+    DeleteDirectoriesIfEmpty(fs, path);
+    Common::GetTitlePath(title_id, path, sizeof(path));
+    DeleteDirectoriesIfEmpty(fs, path);
   }
   else
   {
@@ -509,15 +540,10 @@ void ESCore::FinishAllStaleImports()
 std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& content,
                                    Ticks ticks) const
 {
-  if (content.IsShared())
-  {
-    ES::SharedContentMap content_map{m_ios.GetFSCore()};
-    ticks.Add(content_map.GetTicks());
-    std::string filename;
-    content_map.GetFilenameFromSHA1(content.sha1, &filename);
-    return filename;
-  }
-  return StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content.id);
+  char path[Common::NAND_PATH_SIZE];
+  if (!GetContentPath(title_id, content, path, sizeof(path), ticks))
+    return {};
+  return path;
 }
 
 bool ESCore::GetContentPath(const u64 title_id, const ES::Content& content, char* out,

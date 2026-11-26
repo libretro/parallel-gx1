@@ -9,85 +9,63 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
 
 namespace Common
 {
-std::string RootUserPath(FromWhichRoot from)
+/* dir + "%08x/%08x" of the title ID + suffix */
+static void TitleIDPath(const char* dir, u64 title_id, const char* suffix, char* out,
+                        size_t out_size)
 {
-  int idx{};
-  switch (from)
-  {
-  case FromWhichRoot::None:
-    return "";
-  case FromWhichRoot::Configured:
-    idx = D_WIIROOT_IDX;
-    break;
-  case FromWhichRoot::Session:
-    idx = D_SESSION_WIIROOT_IDX;
-    break;
-  case FromWhichRoot::Banners:
-    idx = D_BANNERS_WIIROOT_IDX;
-    break;
-  }
-  std::string dir = File::GetUserPath(idx);
-  dir.pop_back();  // remove trailing path separator
-  return dir;
+  snprintf(out, out_size, "%s%08x/%08x%s", dir, static_cast<u32>(title_id >> 32),
+           static_cast<u32>(title_id), suffix);
 }
 
-/* root + dir + "%08x/%08x" of the title ID + suffix */
-static std::string TitleIDPath(FromWhichRoot from, const char* dir, u64 title_id,
-                               const char* suffix)
+void GetImportTitlePath(u64 title_id, char* out, size_t out_size)
 {
-  char id[20];
-  snprintf(id, sizeof(id), "%08x/%08x", static_cast<u32>(title_id >> 32),
-           static_cast<u32>(title_id));
-  std::string path = RootUserPath(from);
-  path += dir;
-  path += id;
-  path += suffix;
-  return path;
+  TitleIDPath("/import/", title_id, "", out, out_size);
 }
 
-std::string GetImportTitlePath(u64 title_id, FromWhichRoot from)
+void GetTicketFileName(u64 title_id, char* out, size_t out_size)
 {
-  return TitleIDPath(from, "/import/", title_id, "");
+  TitleIDPath("/ticket/", title_id, ".tik", out, out_size);
 }
 
-std::string GetTicketFileName(u64 title_id, FromWhichRoot from)
+void GetV1TicketFileName(u64 title_id, char* out, size_t out_size)
 {
-  return TitleIDPath(from, "/ticket/", title_id, ".tik");
+  TitleIDPath("/ticket/", title_id, ".tv1", out, out_size);
 }
 
-std::string GetV1TicketFileName(u64 title_id, FromWhichRoot from)
+void GetTitlePath(u64 title_id, char* out, size_t out_size)
 {
-  return TitleIDPath(from, "/ticket/", title_id, ".tv1");
+  TitleIDPath("/title/", title_id, "", out, out_size);
 }
 
-std::string GetTitlePath(u64 title_id, FromWhichRoot from)
+void GetTitleDataPath(u64 title_id, char* out, size_t out_size)
 {
-  return TitleIDPath(from, "/title/", title_id, "");
+  TitleIDPath("/title/", title_id, "/data", out, out_size);
 }
 
-std::string GetTitleDataPath(u64 title_id, FromWhichRoot from)
+void GetTitleDataFilePath(u64 title_id, const char* file_name, char* out, size_t out_size)
 {
-  return GetTitlePath(title_id, from) + "/data";
+  snprintf(out, out_size, "/title/%08x/%08x/data/%s", static_cast<u32>(title_id >> 32),
+           static_cast<u32>(title_id), file_name);
 }
 
-std::string GetTitleContentPath(u64 title_id, FromWhichRoot from)
+void GetTitleContentPath(u64 title_id, char* out, size_t out_size)
 {
-  return GetTitlePath(title_id, from) + "/content";
+  TitleIDPath("/title/", title_id, "/content", out, out_size);
 }
 
-std::string GetTMDFileName(u64 title_id, FromWhichRoot from)
+void GetTitleContentFilePath(u64 title_id, const char* file_name, char* out, size_t out_size)
 {
-  return GetTitleContentPath(title_id, from) + "/title.tmd";
+  snprintf(out, out_size, "/title/%08x/%08x/content/%s", static_cast<u32>(title_id >> 32),
+           static_cast<u32>(title_id), file_name);
 }
 
-std::string GetMiiDatabasePath(FromWhichRoot from)
+void GetTMDFileName(u64 title_id, char* out, size_t out_size)
 {
-  return RootUserPath(from) + "/shared2/menu/FaceLib/RFL_DB.dat";
+  TitleIDPath("/title/", title_id, "/content/title.tmd", out, out_size);
 }
 
 static bool IsIllegalCharacter(char c)

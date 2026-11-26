@@ -973,7 +973,11 @@ bool retro_load_game(const struct retro_game_info* game)
       DiscIO::DestroyVolume(volume);
     }
 
-    const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
+    char wii_menu_tmd_path[Common::NAND_PATH_SIZE];
+    Common::GetTMDFileName(Titles::SYSTEM_MENU, wii_menu_tmd_path, sizeof(wii_menu_tmd_path));
+    // The user path ends with a separator, which the NAND path starts with.
+    const std::string wii_menu_tmd_file_name =
+        File::GetUserPath(D_WIIROOT_IDX) + (wii_menu_tmd_path + 1);
     const bool wii_menu_installed = File::Exists(wii_menu_tmd_file_name);
     if (is_disc_title && !wii_menu_installed)
       WARN_LOG(BOOT,

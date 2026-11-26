@@ -57,7 +57,9 @@ class NandStorage final : public Storage
 public:
   explicit NandStorage(FS::FileSystem* fs, u64 tid) : m_fs{fs}, m_tid{tid}
   {
-    m_data_dir = Common::GetTitleDataPath(tid);
+    char data_dir[Common::NAND_PATH_SIZE];
+    Common::GetTitleDataPath(tid, data_dir, sizeof(data_dir));
+    m_data_dir = data_dir;
     InitTitleUidAndGid();
     ScanForFiles(m_data_dir);
   }

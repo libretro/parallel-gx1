@@ -10,30 +10,26 @@
 
 namespace Common
 {
-enum class FromWhichRoot
-{
-  None,        // a path relative to the NAND root
-  Configured,  // not related to currently running game - use D_WIIROOT_IDX
-  Session,     // request from currently running game - use D_SESSION_WIIROOT_IDX
-  Banners,     // fallback for Wii savegame banners - use D_BANNERS_WIIROOT_IDX
-};
+// Large enough for every NAND path built below, terminator included.
+constexpr size_t NAND_PATH_SIZE = 64;
 
-std::string RootUserPath(FromWhichRoot from);
+// The following functions write paths relative to the NAND root, cut short to fit in out_size.
 
-// The following functions return paths relative to the NAND root.
-// Unless from is None, the NAND root on the host filesystem will be prepended to the path.
-// TODO: remove the from parameter after all code is migrated off direct FS access.
+// Writes /import/%08x/%08x. Intended for use by ES.
+void GetImportTitlePath(u64 title_id, char* out, size_t out_size);
 
-// Returns /import/%08x/%08x. Intended for use by ES.
-std::string GetImportTitlePath(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
+void GetTicketFileName(u64 title_id, char* out, size_t out_size);
+void GetV1TicketFileName(u64 title_id, char* out, size_t out_size);
+void GetTitlePath(u64 title_id, char* out, size_t out_size);
+void GetTitleDataPath(u64 title_id, char* out, size_t out_size);
+// Writes the path of file_name inside the title's data directory.
+void GetTitleDataFilePath(u64 title_id, const char* file_name, char* out, size_t out_size);
+void GetTitleContentPath(u64 title_id, char* out, size_t out_size);
+// Writes the path of file_name inside the title's content directory.
+void GetTitleContentFilePath(u64 title_id, const char* file_name, char* out, size_t out_size);
+void GetTMDFileName(u64 title_id, char* out, size_t out_size);
 
-std::string GetTicketFileName(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetV1TicketFileName(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetTitlePath(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetTitleDataPath(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetTitleContentPath(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetTMDFileName(u64 title_id, FromWhichRoot from = FromWhichRoot::None);
-std::string GetMiiDatabasePath(FromWhichRoot from = FromWhichRoot::None);
+constexpr char MII_DATABASE_PATH[] = "/shared2/menu/FaceLib/RFL_DB.dat";
 
 // Escapes characters that are invalid or have special meanings in the host file system
 std::string EscapeFileName(const std::string& filename);

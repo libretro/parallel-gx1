@@ -30,12 +30,15 @@ namespace IOS::HLE
 static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket)
 {
   const u64 title_id = ticket.GetTitleId();
-  const std::string path = ticket.IsV1Ticket() ? Common::GetV1TicketFileName(title_id) :
-                                                 Common::GetTicketFileName(title_id);
+  char path[Common::NAND_PATH_SIZE];
+  if (ticket.IsV1Ticket())
+    Common::GetV1TicketFileName(title_id, path, sizeof(path));
+  else
+    Common::GetTicketFileName(title_id, path, sizeof(path));
 
   constexpr FS::Modes ticket_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
-  fs->CreateFullPath(PID_KERNEL, PID_KERNEL, path.c_str(), 0, ticket_modes);
-  const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), ticket_modes);
+  fs->CreateFullPath(PID_KERNEL, PID_KERNEL, path, 0, ticket_modes);
+  const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, path, ticket_modes);
   if (!file)
     return FS::ConvertResult(file.error());
 
@@ -471,10 +474,10 @@ static bool CheckIfContentHashMatches(const u8* content, const ES::Content& info
   return !std::memcmp(digest, info.sha1, sizeof(digest));
 }
 
-static std::string GetImportContentPath(u64 title_id, u32 content_id)
+static void GetImportContentPath(u64 title_id, u32 content_id, char* out, size_t out_size)
 {
-  return StringFromFormat("%s/content/%08x.app", Common::GetImportTitlePath(title_id).c_str(),
-                          content_id);
+  std::snprintf(out, out_size, "/import/%08x/%08x/content/%08x.app",
+                static_cast<u32>(title_id >> 32), static_cast<u32>(title_id), content_id);
 }
 
 ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
@@ -505,38 +508,40 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   }
 
   const auto fs = m_ios.GetFS();
-  std::string content_path;
+  char content_path[Common::NAND_PATH_SIZE];
   if (content_info.IsShared())
   {
     ES::SharedContentMap shared_content{m_ios.GetFSCore()};
-    content_path = shared_content.AddSharedContent(content_info.sha1);
+    std::snprintf(content_path, sizeof(content_path), "%s",
+                  shared_content.AddSharedContent(content_info.sha1).c_str());
   }
   else
   {
-    content_path = GetImportContentPath(context.title_import_export.tmd.GetTitleId(),
-                                        context.title_import_export.content.id);
+    GetImportContentPath(context.title_import_export.tmd.GetTitleId(),
+                         context.title_import_export.content.id, content_path,
+                         sizeof(content_path));
   }
 
-  const std::string temp_path =
-      "/tmp/" + content_path.substr(content_path.find_last_of('/') + 1, std::string::npos);
+  char temp_path[sizeof("/tmp/") + Common::NAND_PATH_SIZE];
+  const char* const last_separator = std::strrchr(content_path, '/');
+  std::snprintf(temp_path, sizeof(temp_path), "/tmp/%s",
+                last_separator ? last_separator + 1 : content_path);
 
   {
     constexpr FS::Modes content_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
-    const auto file =
-        fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), content_modes);
+    const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, content_modes);
     if (!file || !file->Write(decrypted_data, content_info.size))
     {
-      ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to write to %s", temp_path.c_str());
+      ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to write to %s", temp_path);
       return ES_EIO;
     }
   }
 
-  const FS::ResultCode rename_result =
-      fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), content_path.c_str());
+  const FS::ResultCode rename_result = fs->Rename(PID_KERNEL, PID_KERNEL, temp_path, content_path);
   if (rename_result != FS::ResultCode::Success)
   {
-    fs->Delete(PID_KERNEL, PID_KERNEL, temp_path.c_str());
-    ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to move content to %s", content_path.c_str());
+    fs->Delete(PID_KERNEL, PID_KERNEL, temp_path);
+    ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to move content to %s", content_path);
     return FS::ConvertResult(rename_result);
   }
 
@@ -578,8 +583,9 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
 
     // Note: the import hasn't been finalised yet, so the whole title directory
     // is still in /import, not /title.
-    const std::string path = GetImportContentPath(title_id, content.id);
-    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path.c_str()).has_value())
+    char path[Common::NAND_PATH_SIZE];
+    GetImportContentPath(title_id, content.id, path, sizeof(path));
+    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path).has_value())
       return false;
   }
   return true;
@@ -666,8 +672,9 @@ ReturnCode ESCore::DeleteTitle(u64 title_id)
   if (!CanDeleteTitle(title_id))
     return ES_EINVAL;
 
-  const std::string title_dir = Common::GetTitlePath(title_id);
-  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, title_dir.c_str()));
+  char title_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitlePath(title_id, title_dir, sizeof(title_dir));
+  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, title_dir));
 }
 
 IPCReply ESDevice::DeleteTitle(const IOCtlVRequest& request)
@@ -699,8 +706,11 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
     return FS_ENOENT;
 
   const bool was_v1_ticket = ticket.IsV1Ticket();
-  const std::string ticket_path =
-      was_v1_ticket ? Common::GetV1TicketFileName(title_id) : Common::GetTicketFileName(title_id);
+  char ticket_path[Common::NAND_PATH_SIZE];
+  if (was_v1_ticket)
+    Common::GetV1TicketFileName(title_id, ticket_path, sizeof(ticket_path));
+  else
+    Common::GetTicketFileName(title_id, ticket_path, sizeof(ticket_path));
 
   const u64 ticket_id = Common::swap64(ticket_view + offsetof(ES::TicketView, ticket_id));
   ticket.DeleteTicket(ticket_id);
@@ -712,15 +722,14 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   {
     ASSERT(ticket.IsValid());
     ASSERT(ticket.IsV1Ticket() == was_v1_ticket);
-    const auto file =
-        fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path.c_str(), FS::Mode::ReadWrite);
+    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path, FS::Mode::ReadWrite);
     if (!file || !file->Write(new_ticket, new_ticket_size))
       return ES_EIO;
   }
   else
   {
     // Delete the ticket file if it is now empty.
-    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_path.c_str());
+    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_path);
   }
 
   // Delete the ticket directory if it is now empty.
@@ -757,10 +766,11 @@ ReturnCode ESCore::DeleteTitleContent(u64 title_id) const
   if (!CanDeleteTitle(title_id))
     return ES_EINVAL;
 
-  const std::string content_dir = Common::GetTitleContentPath(title_id);
+  char content_dir[Common::NAND_PATH_SIZE];
+  Common::GetTitleContentPath(title_id, content_dir, sizeof(content_dir));
   FS::DirectoryList files;
   const FS::ResultCode result =
-      m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir.c_str(), &files);
+      m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir, &files);
   if (result != FS::ResultCode::Success)
     return FS::ConvertResult(result);
 
@@ -768,7 +778,11 @@ ReturnCode ESCore::DeleteTitleContent(u64 title_id) const
   {
     const char* const file_name = files.names[i];
     if (std::strlen(file_name) == 12 && !std::strcmp(file_name + 8, ".app"))
-      m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, (content_dir + '/' + file_name).c_str());
+    {
+      char path[Common::NAND_PATH_SIZE];
+      Common::GetTitleContentFilePath(title_id, file_name, path, sizeof(path));
+      m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path);
+    }
   }
   FS::FreeDirectoryList(&files);
 
@@ -798,9 +812,11 @@ ReturnCode ESCore::DeleteContent(u64 title_id, u32 content_id) const
   if (!tmd.FindContentById(content_id, &content))
     return ES_EINVAL;
 
-  const std::string path =
-      StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content_id);
-  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path.c_str()));
+  char content_name[16];
+  char path[Common::NAND_PATH_SIZE];
+  std::snprintf(content_name, sizeof(content_name), "%08x.app", content_id);
+  Common::GetTitleContentFilePath(title_id, content_name, path, sizeof(path));
+  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path));
 }
 
 IPCReply ESDevice::DeleteContent(const IOCtlVRequest& request)
