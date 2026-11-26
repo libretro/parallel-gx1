@@ -23,12 +23,11 @@ static constexpr u64 WII_SECTOR_SIZE = 0x8000;
 static constexpr u64 WII_SECTOR_COUNT = 143432 * 2;
 static constexpr u64 WII_DISC_HEADER_SIZE = 256;
 
-WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const std::string& path)
-    : m_size(0), m_good(false)
+WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const char* path) : m_size(0), m_good(false)
 {
   if (!AddFileToList(std::move(file)))
     return;
-  if (!path.empty())
+  if (path && *path)
     OpenAdditionalFiles(path);
   if (!ReadHeader())
     return;
@@ -63,23 +62,26 @@ u64 WbfsFileReader::GetDataSize() const
   return WII_SECTOR_COUNT * WII_SECTOR_SIZE;
 }
 
-void WbfsFileReader::OpenAdditionalFiles(const std::string& path)
+void WbfsFileReader::OpenAdditionalFiles(const char* path)
 {
-  if (path.length() < 4)
+  const size_t length = std::strlen(path);
+  if (length < 4)
     return;
 
   ASSERT(m_file_count != 0);  // The code below gives .wbf0 for index 0, but it should be .wbfs
 
-  while (true)
+  char* const current_path = static_cast<char*>(std::malloc(length + 1));
+  if (!current_path)
+    return;
+  std::memcpy(current_path, path, length + 1);
+  // Replace last character with index (e.g. wbfs = wbf1)
+  while (m_file_count < MAX_FILES)
   {
-    // Replace last character with index (e.g. wbfs = wbf1)
-    if (m_file_count >= MAX_FILES)
-      return;
-    std::string current_path = path;
-    current_path.back() = static_cast<char>('0' + m_file_count);
+    current_path[length - 1] = static_cast<char>('0' + m_file_count);
     if (!AddFileToList(File::DirectIOFile(current_path, File::AccessMode::Read)))
-      return;
+      break;
   }
+  std::free(current_path);
 }
 
 bool WbfsFileReader::AddFileToList(File::DirectIOFile file)
@@ -188,7 +190,7 @@ File::DirectIOFile& WbfsFileReader::SeekToCluster(u64 offset, u64* available)
   return m_files[0].file;
 }
 
-WbfsFileReader* WbfsFileReader::Create(File::DirectIOFile file, const std::string& path)
+WbfsFileReader* WbfsFileReader::Create(File::DirectIOFile file, const char* path)
 {
   WbfsFileReader* reader = new WbfsFileReader(std::move(file), path);
 

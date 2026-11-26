@@ -40,7 +40,7 @@ static_assert(sizeof(NFSHeader) == 0x200);
 class NFSFileReader final : public BlobReaderOfKind<BlobReaderKind::NFS>
 {
 public:
-  static NFSFileReader* Create(File::DirectIOFile first_file, const std::string& directory_path);
+  static NFSFileReader* Create(File::DirectIOFile first_file, const char* path);
 
   BlobType GetBlobType() const { return BlobType::NFS; }
   BlobReader* CopyReader() const;
@@ -59,12 +59,13 @@ private:
   static constexpr u32 BLOCK_SIZE = 0x8000;
   static constexpr u32 MAX_FILE_SIZE = 0xFA00000;
 
-  // key_out: 16 bytes
-  static bool ReadKey(const std::string& path, const std::string& directory, u8* key_out);
+  // key_out: 16 bytes; the directory is the first directory_length chars of path, its '/' included
+  static bool ReadKey(const char* path, size_t directory_length, u8* key_out);
   // The header's ranges, byteswapped, into m_lba_ranges
   void GetLBARanges(const NFSHeader& header);
-  // The hif_*.nfs files into m_files; false if one is missing or they are too small
-  bool OpenFiles(const std::string& directory, File::DirectIOFile first_file,
+  // The hif_*.nfs files in the directory, as ReadKey's, into m_files; false if one is missing or
+  // they are too small
+  bool OpenFiles(const char* path, size_t directory_length, File::DirectIOFile first_file,
                  u64 expected_raw_size);
   static u64 CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count);
   static u64 CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size_t count);

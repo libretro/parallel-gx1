@@ -19,7 +19,7 @@ class WbfsFileReader final : public BlobReaderOfKind<BlobReaderKind::Wbfs>
 public:
   ~WbfsFileReader();
 
-  static WbfsFileReader* Create(File::DirectIOFile file, const std::string& path);
+  static WbfsFileReader* Create(File::DirectIOFile file, const char* path);
 
   BlobType GetBlobType() const { return BlobType::WBFS; }
   BlobReader* CopyReader() const;
@@ -35,9 +35,10 @@ public:
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
-  WbfsFileReader(File::DirectIOFile file, const std::string& path = "");
+  // path names the .wbfs file for its parts; none are opened when it is null
+  WbfsFileReader(File::DirectIOFile file, const char* path = nullptr);
 
-  void OpenAdditionalFiles(const std::string& path);
+  void OpenAdditionalFiles(const char* path);
   bool AddFileToList(File::DirectIOFile file);
   bool ReadHeader();
 

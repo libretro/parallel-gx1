@@ -5,11 +5,11 @@
 
 #include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <retro_miscellaneous.h>
 #include <string>
-#include <string_view>
 #include <utility>
 
 #include "Common/Align.h"
@@ -21,29 +21,46 @@
 
 namespace DiscIO
 {
-bool NFSFileReader::ReadKey(const std::string& path, const std::string& directory, u8* key_out)
+// Where the name in the first length chars of path starts, after its last separator
+static size_t NameStart(const char* path, size_t length)
 {
-  const std::string_view directory_without_trailing_slash =
-      std::string_view(directory).substr(0, directory.size() - 1);
-
-  std::string parent, parent_name, parent_extension;
-  SplitPath(directory_without_trailing_slash, &parent, &parent_name, &parent_extension);
-
-  if (parent_name + parent_extension != "content")
+  while (length > 0 && path[length - 1] != '/'
+#ifdef _WIN32
+         && path[length - 1] != ':'
+#endif
+  )
   {
-    ERROR_LOG(DISCIO, "hif_000000.nfs is not in a directory named 'content': %s", path.c_str());
+    length--;
+  }
+  return length;
+}
+
+bool NFSFileReader::ReadKey(const char* path, size_t directory_length, u8* key_out)
+{
+  // the directory without its trailing slash, then its parent's
+  const size_t content_length = directory_length ? directory_length - 1 : 0;
+  const size_t parent_length = NameStart(path, content_length);
+  static const char content[] = "content";
+
+  if (!directory_length || content_length - parent_length != sizeof(content) - 1 ||
+      std::memcmp(path + parent_length, content, sizeof(content) - 1))
+  {
+    ERROR_LOG(DISCIO, "hif_000000.nfs is not in a directory named 'content': %s", path);
     return false;
   }
 
-  const std::string key_path = parent + "code/htk.bin";
+  static const char key_name[] = "code/htk.bin";
+  char* const key_path = static_cast<char*>(std::malloc(parent_length + sizeof(key_name)));
+  if (!key_path)
+    return false;
+  std::memcpy(key_path, path, parent_length);
+  std::memcpy(key_path + parent_length, key_name, sizeof(key_name));
   File::DirectIOFile key_file(key_path, File::AccessMode::Read);
-  if (!key_file.Read(key_out, 16))
-  {
-    ERROR_LOG(DISCIO, "Failed to read from %s", key_path.c_str());
-    return false;
-  }
-
-  return true;
+  const bool read = key_file.Read(key_out, 16);
+  if (!read)
+    ERROR_LOG(DISCIO, "Failed to read from %s", key_path);
+  std::free(key_path);
+  return read;
 }
 
 void NFSFileReader::GetLBARanges(const NFSHeader& header)
@@ -61,14 +78,15 @@ void NFSFileReader::GetLBARanges(const NFSHeader& header)
   }
 }
 
-bool NFSFileReader::OpenFiles(const std::string& directory, File::DirectIOFile first_file,
-                              u64 expected_raw_size)
+bool NFSFileReader::OpenFiles(const char* path, size_t directory_length,
+                              File::DirectIOFile first_file, u64 expected_raw_size)
 {
+  const int directory_print_length = static_cast<int>(directory_length);
   const u64 file_count = Common::AlignUp(expected_raw_size, MAX_FILE_SIZE) / MAX_FILE_SIZE;
   if (file_count > MAX_FILES)
   {
-    ERROR_LOG(DISCIO, "%s needs %" PRIu64 " NFS files, more than %zu", directory.c_str(),
-              file_count, MAX_FILES);
+    ERROR_LOG(DISCIO, "%.*s needs %" PRIu64 " NFS files, more than %zu", directory_print_length,
+              path, file_count, MAX_FILES);
     return false;
   }
 
@@ -76,28 +94,34 @@ bool NFSFileReader::OpenFiles(const std::string& directory, File::DirectIOFile f
   m_files[0] = std::move(first_file);
   m_file_count = 1;
 
+  // the directory, then each file's name
+  static const size_t CHILD_NAME_SIZE = 32;
+  char* const child_path = static_cast<char*>(std::malloc(directory_length + CHILD_NAME_SIZE));
+  if (!child_path)
+    return false;
+  std::memcpy(child_path, path, directory_length);
   for (u64 i = 1; i < file_count; ++i)
   {
-    char child_name[32];
-    snprintf(child_name, sizeof(child_name), "hif_%06" PRIu64 ".nfs", i);
-    const std::string child_path = directory + child_name;
+    snprintf(child_path + directory_length, CHILD_NAME_SIZE, "hif_%06" PRIu64 ".nfs", i);
     File::DirectIOFile child(child_path, File::AccessMode::Read);
     if (!child.IsOpen())
     {
-      ERROR_LOG(DISCIO, "Failed to open %s", child_path.c_str());
+      ERROR_LOG(DISCIO, "Failed to open %s", child_path);
+      std::free(child_path);
       return false;
     }
 
     m_raw_size += child.GetSize();
     m_files[m_file_count++] = std::move(child);
   }
+  std::free(child_path);
 
   if (m_raw_size < expected_raw_size)
   {
     ERROR_LOG(DISCIO,
-              "Expected sum of NFS file sizes for %s to be at least %" PRIu64
+              "Expected sum of NFS file sizes for %.*s to be at least %" PRIu64
               " bytes, but it was %" PRIu64 " bytes",
-              directory.c_str(), expected_raw_size, m_raw_size);
+              directory_print_length, path, expected_raw_size, m_raw_size);
     return false;
   }
 
@@ -126,15 +150,14 @@ u64 NFSFileReader::CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size
   return u64(greatest_block_index) * BLOCK_SIZE;
 }
 
-NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::string& path)
+NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const char* path)
 {
-  std::string directory, filename, extension;
-  SplitPath(path, &directory, &filename, &extension);
-  if (filename + extension != "hif_000000.nfs")
+  const size_t directory_length = NameStart(path, std::strlen(path));
+  if (std::strcmp(path + directory_length, "hif_000000.nfs"))
     return nullptr;
 
   u8 key[16];
-  if (!ReadKey(path, directory, key))
+  if (!ReadKey(path, directory_length, key))
     return nullptr;
 
   NFSHeader header;
@@ -147,7 +170,7 @@ NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::s
   const u64 expected_raw_size =
       CalculateExpectedRawSize(reader->m_lba_ranges, reader->m_lba_range_count);
 
-  if (!reader->OpenFiles(directory, std::move(first_file), expected_raw_size))
+  if (!reader->OpenFiles(path, directory_length, std::move(first_file), expected_raw_size))
   {
     DestroyBlobReader(reader);
     return nullptr;
