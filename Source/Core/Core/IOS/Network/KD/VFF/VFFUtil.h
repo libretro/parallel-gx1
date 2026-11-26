@@ -25,8 +25,9 @@ constexpr u16 VF_LITTLE_ENDIAN = 0xFFFE;
 constexpr u16 VF_BIG_ENDIAN = 0xFEFF;
 ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
                      const u8* data, size_t size);
+// Reads exactly size bytes of the file into out.
 ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                      std::vector<u8>& out);
+                      u8* out, size_t size);
 ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename,
                             FS::FileSystem* fs);
 

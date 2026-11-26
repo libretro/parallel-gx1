@@ -489,8 +489,7 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
   // _fw.bin
   {
     const auto fw_url = base_url + fw_filename;
-    std::vector<u8> response;
-    if (!request.Get(fw_url, &response))
+    if (!request.Get(fw_url.c_str()))
     {
       PanicAlert("HTTP GET %s\n\nError: %d", fw_url.c_str(), request.GetLastResponseCode());
       return;
@@ -498,14 +497,13 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
 
     File::WriteStringToFile(
         firmware_load_path + fw_filename,
-        std::string_view{reinterpret_cast<const char*>(response.data()), response.size()});
+        std::string_view{reinterpret_cast<const char*>(request.GetBody()), request.GetBodySize()});
   }
 
   // _config.bin
   {
     const auto config_url = base_url + config_filename;
-    std::vector<u8> response;
-    if (!request.Get(config_url, &response))
+    if (!request.Get(config_url.c_str()))
     {
       if (request.GetLastResponseCode() == 404)
       {
@@ -524,7 +522,7 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
 
     File::WriteStringToFile(
         firmware_load_path + config_filename,
-        std::string_view{reinterpret_cast<const char*>(response.data()), response.size()});
+        std::string_view{reinterpret_cast<const char*>(request.GetBody()), request.GetBodySize()});
   }
 }
 

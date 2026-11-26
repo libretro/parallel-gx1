@@ -3,15 +3,12 @@
 
 #pragma once
 
-#include <string>
-#include <string_view>
-#include <vector>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 
 namespace Common
 {
-// A blocking HTTP request, run on the HTTP thread (Common/HttpService.h).
 class HttpRequest final
 {
 public:
@@ -22,26 +19,35 @@ public:
 
   struct Multiform
   {
-    std::string name;
-    std::string data;
+    const char* name;
+    const void* data;
+    size_t data_size;
   };
 
   void FollowRedirects();
   s32 GetLastResponseCode() const;
-  std::string GetHeaderValue(std::string_view name) const;
-  // Fill response with the body; false on anything other than a 200 reply.
-  bool Get(const std::string& url, std::vector<u8>* response);
-  bool Post(const std::string& url, std::string_view payload, std::vector<u8>* response);
-  bool PostMultiform(const std::string& url, const Multiform* multiform, size_t multiform_count,
-                     std::vector<u8>* response);
+  // The value of a header of the last reply, or nullptr when it has none.
+  const char* GetHeaderValue(const char* name) const;
+  // The body of the last reply, valid until the next request.
+  const u8* GetBody() const { return m_body; }
+  size_t GetBodySize() const { return m_body_size; }
+  // False on anything other than a 200 reply.
+  bool Get(const char* url);
+  bool Post(const char* url, const char* payload, size_t payload_size);
+  bool PostMultiform(const char* url, const Multiform* multiform, size_t multiform_count);
 
 private:
-  bool Fetch(const std::string& url, const char* method, const char* content_type, const void* body,
-             size_t body_len, std::vector<u8>* response);
+  bool Fetch(const char* url, const char* method, const char* content_type, const void* body,
+             size_t body_len);
+  static bool AppendBody(void* userdata, const void* data, size_t len);
 
   int m_timeout_ms;
   bool m_follow_redirects = false;
   s32 m_last_response_code = 0;
   char* m_headers = nullptr;
+  // Grown by doubling and kept across requests
+  u8* m_body = nullptr;
+  size_t m_body_size = 0;
+  size_t m_body_capacity = 0;
 };
 }  // namespace Common

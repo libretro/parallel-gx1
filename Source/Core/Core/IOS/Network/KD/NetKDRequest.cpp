@@ -410,15 +410,15 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   const std::string form_data(StringFromFormat("mlchkid=%.*s&chlng=%" PRIu64,
                                                static_cast<int>(m_config.GetMlchkid().size()),
                                                m_config.GetMlchkid().data(), (u64)random_number));
-  std::vector<u8> response;
-  if (!m_http.Post(m_config.GetCheckURL(), form_data, &response))
+  if (!m_http.Post(m_config.GetCheckURL().c_str(), form_data.data(), form_data.size()))
   {
     ERROR_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Failed to request data at %s.",
               m_config.GetCheckURL().c_str());
     return NWC24::WC24_ERR_SERVER;
   }
 
-  const std::string response_str = {response.begin(), response.end()};
+  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
+                                 m_http.GetBodySize());
   const std::string code = GetValueFromCGIResponse(response_str, "cd");
   if (code != "100")
   {
@@ -454,7 +454,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   *mail_flag = std::strncmp(str_mail_flag.data(), m_send_list.GetMailFlag().data(), 22) != 0;
 
   {
-    bool did_parse = TryParse(m_http.GetHeaderValue("X-Wii-Mail-Check-Span"), interval);
+    const char* const mail_span = m_http.GetHeaderValue("X-Wii-Mail-Check-Span");
+    bool did_parse = mail_span && TryParse(mail_span, interval);
     if (did_parse)
     {
       if (*interval == 0)
@@ -466,7 +467,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
     }
 
     u32 download_span = 0;
-    did_parse = TryParse(m_http.GetHeaderValue("X-Wii-Download-Span"), &download_span);
+    const char* const download_span_value = m_http.GetHeaderValue("X-Wii-Download-Span");
+    did_parse = download_span_value && TryParse(download_span_value, &download_span);
     if (did_parse)
       retro_atomic_store_release_int(&m_download_span, static_cast<int>(std::max(download_span, 1u)));
   }
@@ -547,6 +549,13 @@ NWC24::ErrorCode NetKDRequestDevice::DetermineSubtask(u16 entry_index, s32* subt
   return NWC24::WC24_ERR_INVALID_VALUE;
 }
 
+// A mail sent as one part of the multipart form
+struct MailPart
+{
+  char name[16];
+  u8* data;
+};
+
 NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
 {
   bool success = false;
@@ -568,9 +577,21 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   const std::string auth = StringFromFormat(
       "mlid=w%016" PRIu64 "\r\npasswd=%.*s", (u64)m_config.Id(),
       static_cast<int>(m_config.GetPassword().size()), m_config.GetPassword().data());
-  std::vector<Common::HttpRequest::Multiform> multiform = {{"mlid", auth}};
-
   std::vector<u32> mails = m_send_list.GetMailToSend();
+  // One part for the login, then one per mail; the mails' names and contents are kept until sent.
+  Common::HttpRequest::Multiform* const multiform = static_cast<Common::HttpRequest::Multiform*>(
+      std::calloc(mails.size() + 1, sizeof(Common::HttpRequest::Multiform) + sizeof(MailPart)));
+  if (!multiform)
+    return NWC24::WC24_ERR_SERVER;
+  MailPart* const parts = reinterpret_cast<MailPart*>(multiform + mails.size() + 1);
+  size_t multiform_count = 1;
+  multiform[0] = {"mlid", auth.data(), auth.size()};
+  Common::ScopeGuard multiform_guard([&] {
+    for (size_t part = 1; part < multiform_count; part++)
+      std::free(parts[part].data);
+    std::free(multiform);
+  });
+
   for (const u32 file_index : mails)
   {
     const u32 entry_id = m_send_list.GetEntryId(file_index);
@@ -591,14 +612,19 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
       continue;
     }
 
-    std::vector<u8> mail_data(mail_size);
-    NWC24::ErrorCode res = NWC24::ReadFromVFF(
-        NWC24::Mail::SEND_BOX_PATH, m_send_list.GetMailPath(file_index), m_ios.GetFS(), mail_data);
+    MailPart& part = parts[multiform_count];
+    part.data = static_cast<u8*>(std::malloc(mail_size ? mail_size : 1));
+    NWC24::ErrorCode res = part.data ? NWC24::ReadFromVFF(NWC24::Mail::SEND_BOX_PATH,
+                                                          m_send_list.GetMailPath(file_index),
+                                                          m_ios.GetFS(), part.data, mail_size) :
+                                       NWC24::WC24_ERR_FILE_READ;
     if (res != NWC24::WC24_OK)
     {
       ERROR_LOG(IOS_WC24, "Reading mail at index %u failed with error code %d.", entry_id,
                 static_cast<s32>(res));
       LogError(ErrorType::SendMail, NWC24::WC24_MSG_DAMAGED);
+      std::free(part.data);
+      part.data = nullptr;
       res = m_send_list.DeleteMessage(file_index);
       if (res != NWC24::WC24_OK)
       {
@@ -609,13 +635,12 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
       continue;
     }
 
-    const std::string mail_str = {mail_data.begin(), mail_data.end()};
-
-    multiform.push_back({StringFromFormat("m%u", entry_id), mail_str});
+    std::snprintf(part.name, sizeof(part.name), "m%u", entry_id);
+    multiform[multiform_count] = {part.name, part.data, mail_size};
+    multiform_count++;
   }
 
-  std::vector<u8> response;
-  if (!m_http.PostMultiform(m_config.GetSendURL(), multiform.data(), multiform.size(), &response))
+  if (!m_http.PostMultiform(m_config.GetSendURL().c_str(), multiform, multiform_count))
   {
     ERROR_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_SEND_MAIL_NOW: Failed to request data at %s.",
               m_config.GetSendURL().c_str());
@@ -623,7 +648,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   }
 
   // Now check if any mail failed to save to the server.
-  const std::string response_str = {response.begin(), response.end()};
+  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
+                                 m_http.GetBodySize());
   const std::string code = GetValueFromCGIResponse(response_str, "cd");
   if (code != "100")
   {
@@ -692,8 +718,6 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
     m_dl_list.WriteDlList();
   });
 
-  std::vector<u8> file_data;
-
   // Content metadata
   const std::string content_name = m_dl_list.GetVFFContentName(entry_index, subtask_id);
   std::string url = m_dl_list.GetDownloadURL(entry_index, subtask_id);
@@ -727,8 +751,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
   INFO_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_DOWNLOAD_NOW_EX - NI - Name: %s",
            content_name.c_str());
 
-  std::vector<u8> response;
-  if (!m_http.Get(url, &response))
+  if (!m_http.Get(url.c_str()))
   {
     const s32 last_response_code = m_http.GetLastResponseCode();
     ERROR_LOG(IOS_WC24, "Failed to request data at %s. HTTP Status Code: %d", url.c_str(),
@@ -741,11 +764,16 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
     return NWC24::WC24_ERR_SERVER;
   }
 
+  const u8* const response = m_http.GetBody();
+  const size_t response_size = m_http.GetBodySize();
+  const u8* file_data;
+  size_t file_size;
+  u8* decrypted = nullptr;
   if (!m_dl_list.IsRSASigned(entry_index))
   {
     // Data that is not signed with an RSA key will not have the WC24 header or 320 bytes before the
     // actual data. We just have to make sure that the response is not empty.
-    if (response.empty())
+    if (!response_size)
     {
       ERROR_LOG(IOS_WC24, "File at %s is empty.", url.c_str());
       LogError(ErrorType::KD_Download, NWC24::WC24_ERR_BROKEN);
@@ -753,11 +781,12 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
     }
 
     file_data = response;
+    file_size = response_size;
   }
   else
   {
     // Check if the filesize is smaller than the header size.
-    if (response.size() < sizeof(NWC24::WC24File))
+    if (response_size < sizeof(NWC24::WC24File))
     {
       ERROR_LOG(IOS_WC24, "File at %s is too small to be a valid file.", url.c_str());
       LogError(ErrorType::KD_Download, NWC24::WC24_ERR_BROKEN);
@@ -766,9 +795,9 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
 
     // Now we read the file
     NWC24::WC24File wc24_file;
-    std::memcpy(&wc24_file, response.data(), sizeof(NWC24::WC24File));
-
-    std::vector<u8> temp_buffer(response.begin() + 320, response.end());
+    std::memcpy(&wc24_file, response, sizeof(NWC24::WC24File));
+    file_data = response + sizeof(NWC24::WC24File);
+    file_size = response_size - sizeof(NWC24::WC24File);
 
     if (m_dl_list.IsEncrypted(entry_index))
     {
@@ -780,20 +809,20 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32
         return NWC24::WC24_ERR_FILE_OPEN;
       }
 
-      file_data = std::vector<u8>(response.size() - 320);
-
-      CryptOFB(pubk_mod.aes_key, wc24_file.iv, temp_buffer.data(), file_data.data(),
-               temp_buffer.size());
-    }
-    else
-    {
-      file_data = std::move(temp_buffer);
+      decrypted = static_cast<u8*>(std::malloc(file_size ? file_size : 1));
+      if (!decrypted)
+      {
+        LogError(ErrorType::KD_Download, NWC24::WC24_ERR_BROKEN);
+        return NWC24::WC24_ERR_BROKEN;
+      }
+      CryptOFB(pubk_mod.aes_key, wc24_file.iv, file_data, decrypted, file_size);
+      file_data = decrypted;
     }
   }
 
-  NWC24::ErrorCode reply = IOS::HLE::NWC24::WriteToVFF(m_dl_list.GetVFFPath(entry_index),
-                                                       content_name, m_ios.GetFS(), file_data.data(),
-                                                       file_data.size());
+  NWC24::ErrorCode reply = IOS::HLE::NWC24::WriteToVFF(
+      m_dl_list.GetVFFPath(entry_index), content_name, m_ios.GetFS(), file_data, file_size);
+  std::free(decrypted);
 
   if (reply != NWC24::WC24_OK)
   {
@@ -969,8 +998,7 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   const std::string form_data =
       StringFromFormat("mlid=w%016" PRIu64 "&hdid=%u&rgncd=%s", (u64)m_config.Id(),
                        m_ios.GetIOSC().GetDeviceId(), serno.c_str());
-  std::vector<u8> response;
-  if (!m_http.Post(m_config.GetAccountURL(), form_data, &response))
+  if (!m_http.Post(m_config.GetAccountURL().c_str(), form_data.data(), form_data.size()))
   {
     ERROR_LOG(IOS_WC24,
               "NET_KD_REQ: IOCTL_NWC24_REQUEST_REGISTER_USER_ID: Failed to request data at %s.",
@@ -980,7 +1008,8 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
     return IPCReply{IPC_SUCCESS};
   }
 
-  const std::string response_str = {response.begin(), response.end()};
+  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
+                                 m_http.GetBodySize());
   const std::string code = GetValueFromCGIResponse(response_str, "cd");
   s32 cgi_code{};
   const bool did_parse = TryParse(code, &cgi_code);

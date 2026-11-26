@@ -236,7 +236,7 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
   return WC24_OK;
 }
 
-static ErrorCode ReadFile(const std::string& filename, std::vector<u8>& out)
+static ErrorCode ReadFile(const std::string& filename, u8* out, u32 size)
 {
   FIL src{};
   const auto open_error_code = f_open(&src, filename.c_str(), FA_READ);
@@ -248,9 +248,8 @@ static ErrorCode ReadFile(const std::string& filename, std::vector<u8>& out)
 
   Common::ScopeGuard vff_close_guard{[&] { f_close(&src); }};
 
-  u32 size = static_cast<u32>(out.size());
   u32 read_size{};
-  const auto read_error_code = f_read(&src, out.data(), size, &read_size);
+  const auto read_error_code = f_read(&src, out, size, &read_size);
   if (read_error_code != FR_OK)
   {
     ERROR_LOG(IOS_WC24, "Failed to read file %s in VFF: %u", filename.c_str(),
@@ -371,7 +370,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::F
 }
 
 ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
-                      std::vector<u8>& out)
+                      u8* out, size_t size)
 {
   VffFatFsCallbacks callbacks;
   struct ReadState
@@ -379,12 +378,13 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
     const std::string& path;
     const std::string& filename;
     FS::FileSystem* fs;
-    std::vector<u8>& out;
+    u8* out;
+    u32 size;
     VffFatFsCallbacks* callbacks;
     ErrorCode return_value;
   };
   // fails when FatFs is busy on another thread
-  ReadState vff_state{path, filename, fs, out, &callbacks, WC24_ERR_FATAL};
+  ReadState vff_state{path, filename, fs, out, static_cast<u32>(size), &callbacks, WC24_ERR_FATAL};
   Common::RunInFatFsContext(
       callbacks,
       [](void* user) {
@@ -420,7 +420,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::
           return;
         }
 
-        const ErrorCode read_error_code = ReadFile(state.filename, state.out);
+        const ErrorCode read_error_code = ReadFile(state.filename, state.out, state.size);
         if (read_error_code != WC24_OK)
         {
           state.return_value = read_error_code;
