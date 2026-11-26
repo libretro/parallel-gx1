@@ -949,14 +949,6 @@ void EmulationKernel::UpdateDevices()
   }
 }
 
-void EmulationKernel::UpdateWantDeterminism(const bool new_want_determinism)
-{
-  if (m_socket_manager)
-    m_socket_manager->UpdateWantDeterminism(new_want_determinism);
-  for (u32 i = 0; i < m_device_count; i++)
-    m_devices[i].device->UpdateWantDeterminism(new_want_determinism);
-}
-
 void EmulationKernel::DoState(PointerWrap& p)
 {
   DO_RETRO_DEQUE(p, u32_deque, &m_request_queue);

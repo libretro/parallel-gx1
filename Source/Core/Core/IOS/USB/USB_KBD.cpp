@@ -217,8 +217,8 @@ IPCReply USB_KBD::Write(const ReadWriteRequest& request)
 
 IPCReply USB_KBD::IOCtl(const IOCtlRequest& request)
 {
-  if (Config::Get(Config::MAIN_WII_KEYBOARD) && !Core::WantsDeterminism() &&
-      ControlReference::GetInputGate() && !usb_kbd_messages_empty(&m_message_queue))
+  if (Config::Get(Config::MAIN_WII_KEYBOARD) && ControlReference::GetInputGate() &&
+      !usb_kbd_messages_empty(&m_message_queue))
   {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
@@ -241,7 +241,7 @@ bool USB_KBD::IsKeyPressed(int key) const
 
 void USB_KBD::Update()
 {
-  if (!Config::Get(Config::MAIN_WII_KEYBOARD) || Core::WantsDeterminism() || !m_is_active)
+  if (!Config::Get(Config::MAIN_WII_KEYBOARD) || !m_is_active)
     return;
 
   u8 modifiers = 0x00;

@@ -474,43 +474,7 @@ static bool Pack(const File::FSTEntry& entry, bool is_root, std::vector<u8>& tmp
   return true;
 }
 
-static void SiftDown(File::FSTEntry* entries, size_t root, size_t count)
-{
-  for (;;)
-  {
-    size_t child = root * 2 + 1;
-    if (child >= count)
-      return;
-    if (child + 1 < count && entries[child].virtualName < entries[child + 1].virtualName)
-      child++;
-    if (!(entries[root].virtualName < entries[child].virtualName))
-      return;
-    std::swap(entries[root], entries[child]);
-    root = child;
-  }
-}
-
-static void SortFST(File::FSTEntry* root)
-{
-  // in-place heap sort by name
-  File::FSTEntry* const entries = root->children.data();
-  const size_t count = root->children.size();
-  size_t i;
-  if (count > 1)
-  {
-    for (i = count / 2; i > 0; i--)
-      SiftDown(entries, i - 1, count);
-    for (i = count - 1; i > 0; i--)
-    {
-      std::swap(entries[0], entries[i]);
-      SiftDown(entries, 0, i);
-    }
-  }
-  for (auto& child : root->children)
-    SortFST(&child);
-}
-
-bool SyncSDFolderToSDImage(bool deterministic)
+bool SyncSDFolderToSDImage()
 {
   const std::string source_dir = File::GetUserPath(D_WIISDCARDSYNCFOLDER_IDX);
   const std::string image_path = File::GetUserPath(F_WIISDCARDIMAGE_IDX);
@@ -527,8 +491,6 @@ bool SyncSDFolderToSDImage(bool deterministic)
   }
 
   File::FSTEntry root = File::ScanDirectoryTree(source_dir, true);
-  if (deterministic)
-    SortFST(&root);
   if (!CheckIfFATCompatible(root))
     return false;
 
@@ -553,7 +515,6 @@ bool SyncSDFolderToSDImage(bool deterministic)
 
   File::IOFile image;
   callbacks.m_image = &image;
-  callbacks.m_deterministic = deterministic;
 
   const std::string temp_image_path = File::GetTempFilenameForAtomicWrite(image_path);
   if (!image.Open(temp_image_path, "w+b"))

@@ -39,20 +39,13 @@ GCPadStatus CSIDevice_GCAdapter::GetPadStatus()
 
 int CSIDevice_GCAdapter::RunBuffer(u8* buffer, int request_length)
 {
-  if (!Core::WantsDeterminism())
+  // This returns an error value if there is no controller plugged
+  // into this port on the hardware gc adapter, exposing it to the game.
+  if (!GCAdapter::DeviceConnected(m_device_number))
   {
-    // The previous check is a hack to prevent a desync due to SI devices
-    // being different and returning different values on RunBuffer();
-    // the corresponding code in GCAdapter.cpp has the same check.
-
-    // This returns an error value if there is no controller plugged
-    // into this port on the hardware gc adapter, exposing it to the game.
-    if (!GCAdapter::DeviceConnected(m_device_number))
-    {
-      const u32 device = Common::swap32(SI_NONE);
-      memcpy(buffer, &device, sizeof(device));
-      return 4;
-    }
+    const u32 device = Common::swap32(SI_NONE);
+    memcpy(buffer, &device, sizeof(device));
+    return 4;
   }
   return CSIDevice_GCController::RunBuffer(buffer, request_length);
 }

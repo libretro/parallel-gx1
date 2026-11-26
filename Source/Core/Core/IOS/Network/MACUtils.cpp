@@ -25,9 +25,6 @@ Common::MACAddress GetMACAddress()
   // exist or can't be parsed.
   std::string wireless_mac = Config::Get(Config::MAIN_WIRELESS_MAC);
 
-  if (Core::WantsDeterminism())
-    wireless_mac = "12:34:56:78:9a:bc";
-
   Common::MACAddress mac;
   if (!Common::StringToMacAddress(wireless_mac, &mac))
   {

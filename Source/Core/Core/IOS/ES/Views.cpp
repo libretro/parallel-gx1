@@ -32,8 +32,7 @@ static bool ShouldReturnFakeViewsForIOSes(u64 title_id, const TitleContext& cont
 {
   const bool ios = IsTitleType(title_id, ES::TitleType::System) && title_id != Titles::SYSTEM_MENU;
   const bool disc_title = context.active && ES::IsDiscTitle(context.tmd.GetTitleId());
-  return Core::WantsDeterminism() ||
-         (ios && SConfig::GetInstance().m_disc_booted_from_game_list && disc_title);
+  return ios && SConfig::GetInstance().m_disc_booted_from_game_list && disc_title;
 }
 
 IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)

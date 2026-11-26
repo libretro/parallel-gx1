@@ -177,7 +177,6 @@ public:
 
   void DoState(PointerWrap& p);
   void UpdateDevices();
-  void UpdateWantDeterminism(bool new_want_determinism);
 
   WiiSockMan* GetSocketManager();
 

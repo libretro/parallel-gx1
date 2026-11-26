@@ -316,7 +316,6 @@ bool USBScanner::AddNewDevices(USBDeviceList* new_devices) const
 {
   AddEmulatedDevices(new_devices);
 #ifdef __LIBUSB__
-  if (!Core::WantsDeterminism())
   {
     const std::string whitelist = Config::Get(Config::MAIN_USB_PASSTHROUGH_DEVICES);
     if (!Config::USBDeviceListHas(whitelist.c_str(), nullptr))

@@ -110,8 +110,6 @@ bool IsUninitialized(Core::System& system);
 
 bool IsCPUThread();  // this tells us whether we are the CPU thread.
 
-bool WantsDeterminism();
-
 // SetState can be called from any thread.
 void SetState(Core::System& system, State state, bool report_state_change = true,
               bool override_achievement_restrictions = false);
@@ -124,8 +122,6 @@ void DisplayMessage(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 // Runs run(context) on the CPU thread: queued for it from another, which waits until it is done.
 // Never called from a thread the CPU thread waits for.
 void RunOnCPUThread(Core::System& system, void (*run)(void* context), void* context);
-
-void UpdateWantDeterminism(Core::System& system, bool initial = false);
 
 /* The frame gate (dual core; Core.cpp): retro_run lets the CPU thread
  * run the next field; whether one is granted and not yet ended. */

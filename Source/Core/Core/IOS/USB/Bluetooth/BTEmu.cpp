@@ -38,8 +38,7 @@ BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& 
 {
   queued_events_init(&m_event_queue, 16);
   SysConf sysconf{ios.GetFS()};
-  if (!Core::WantsDeterminism())
-    BackUpBTInfoSection(&sysconf);
+  BackUpBTInfoSection(&sysconf);
 
   ConfPads bt_dinf{};
 

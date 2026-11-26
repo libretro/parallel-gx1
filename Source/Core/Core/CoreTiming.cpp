@@ -366,14 +366,6 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
   }
   else
   {
-    if (Core::WantsDeterminism())
-    {
-      ERROR_LOG(POWERPC,
-                "Someone scheduled an off-thread \"%s\" event while netplay or "
-                "movie play/record was active.  This is likely to cause a desync.",
-                event_type->name);
-    }
-
     ThreadSafeEvent* const node =
         static_cast<ThreadSafeEvent*>(object_pool_alloc(m_ts_pool, sizeof(ThreadSafeEvent)));
     if (!node)

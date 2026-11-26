@@ -366,11 +366,6 @@ IPCReply NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     BufferOutSize3 = request.io_vectors.at(2).size;
   }
 
-  // I don't trust SSL to be deterministic, and this is never going to sync
-  // as such (as opposed to forwarding IPC results or whatever), so -
-  if (Core::WantsDeterminism())
-    return IPCReply(IPC_EACCES);
-
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
 

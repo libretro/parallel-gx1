@@ -67,8 +67,6 @@ static const u16 dpad_sideways_bitmasks[] = {Wiimote::PAD_RIGHT, Wiimote::PAD_LE
 
 void Wiimote::Reset()
 {
-  const bool want_determinism = Core::WantsDeterminism();
-
   SetRumble(false);
 
   // Wiimote starts in non-continuous CORE mode:
@@ -83,7 +81,7 @@ void Wiimote::Reset()
   // happen under different Wii Roots and/or determinism modes.
 
   std::string eeprom_file = (File::GetUserPath(D_SESSION_WIIROOT_IDX) + "/" + GetName() + ".bin");
-  if (!want_determinism && m_eeprom_dirty)
+  if (m_eeprom_dirty)
   {
     // Write out existing EEPROM
     INFO_LOG(WIIMOTE, "Wrote EEPROM for %s", GetName().c_str());
@@ -93,7 +91,7 @@ void Wiimote::Reset()
   }
   m_eeprom = {};
 
-  if (!want_determinism && File::Exists(eeprom_file))
+  if (File::Exists(eeprom_file))
   {
     // Read existing EEPROM
     File::IOFile(eeprom_file, "rb").ReadBytes(m_eeprom.data, EEPROM_FREE_SIZE);
@@ -167,7 +165,6 @@ void Wiimote::Reset()
   m_extension_port.AttachExtension(GetNoneExtension());
   m_motion_plus.GetExtPort().AttachExtension(GetNoneExtension());
 
-  if (!want_determinism)
   {
     // Switch to desired M+ status and extension (if any).
     // M+ and EXT are reset on attachment.

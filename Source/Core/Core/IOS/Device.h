@@ -225,7 +225,6 @@ public:
   virtual IPCReply IOCtl(const IOCtlRequest& ioctl) { return Unsupported(ioctl); }
   virtual IPCReply IOCtlV(const IOCtlVRequest& ioctlv) { return Unsupported(ioctlv); }
   virtual void Update() {}
-  virtual void UpdateWantDeterminism(bool new_want_determinism) {}
   virtual DeviceType GetDeviceType() const { return m_device_type; }
   virtual bool IsOpened() const { return m_is_active; }
 

@@ -1218,13 +1218,6 @@ bool WiiSockMan::AddPollCommand(const PollCommand& cmd)
   return true;
 }
 
-void WiiSockMan::UpdateWantDeterminism(bool want)
-{
-  // If we switched into movie recording, kill existing sockets.
-  if (want)
-    Clean();
-}
-
 void WiiSocket::Abort(WiiSocket::sockop* op, s32 value) const
 {
   op->is_aborted = true;

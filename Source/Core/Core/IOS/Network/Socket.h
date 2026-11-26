@@ -295,8 +295,6 @@ public:
     }
   }
 
-  void UpdateWantDeterminism(bool want);
-
 private:
   void UpdatePollCommands();
   WiiSocket* FindSocket(s32 wii_fd);

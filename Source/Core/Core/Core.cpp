@@ -77,7 +77,6 @@
 
 namespace Core
 {
-static bool s_wants_determinism;
 
 /* What EmuThread brought up, taken down again in reverse (EmuThreadTeardown): when EmuThread
  * returns on its own thread, or when the boot fails; in single core, where it returns once the
@@ -161,11 +160,6 @@ bool IsUninitialized(Core::System& system)
 bool IsCPUThread()
 {
   return tls_is_cpu_thread;
-}
-
-bool WantsDeterminism()
-{
-  return s_wants_determinism;
 }
 
 // This is called from the GUI thread. See the booting call schedule in
@@ -486,7 +480,7 @@ void EmuThread(Core::System& system, BootParameters* boot)
                         Config::Get(Config::MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC);
   if (sync_sd_folder)
   {
-    sync_sd_folder = Common::SyncSDFolderToSDImage(Core::WantsDeterminism());
+    sync_sd_folder = Common::SyncSDFolderToSDImage();
   }
 
   emu.stages.sd_sync = sync_sd_folder;
@@ -742,30 +736,6 @@ void Shutdown(Core::System& system)
     DetachFifoCPUCore();
   if (s_emu_thread_stages.system)
     EmuThreadTeardown(&s_emu_thread_stages);
-}
-
-void UpdateWantDeterminism(Core::System& system, bool initial)
-{
-  // For now, this value is not itself configurable.  Instead, individual
-  // settings that depend on it, such as GPU determinism mode. should have
-  // override options for testing,
-  // Only a movie wanted determinism, and none is ever recorded or played.
-  const bool new_want_determinism = false;
-  if (new_want_determinism != s_wants_determinism || initial)
-  {
-    NOTICE_LOG(COMMON, "Want determinism <- %s", new_want_determinism ? "true" : "false");
-
-    s_wants_determinism = new_want_determinism;
-    const auto ios = system.GetIOS();
-    if (ios)
-      ios->UpdateWantDeterminism(new_want_determinism);
-
-    system.GetFifo().UpdateWantDeterminism(new_want_determinism);
-
-    // We need to clear the cache because some parts of the JIT depend on want_determinism,
-    // e.g. use of FMA.
-    system.GetJitInterface().ClearCache();
-  }
 }
 
 bool IsFieldInFlight()

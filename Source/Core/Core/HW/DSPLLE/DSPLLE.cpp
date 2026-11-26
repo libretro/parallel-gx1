@@ -152,7 +152,7 @@ bool DSPLLE::Initialize(bool wii, bool dsp_thread)
     return false;
 
   // needs to be after DSPCore_Init for the dspjit ptr
-  if (Core::WantsDeterminism() || !m_dsp_core.IsJITCreated())
+  if (!m_dsp_core.IsJITCreated())
     dsp_thread = false;
 
   m_wii = wii;
@@ -265,7 +265,7 @@ void DSPLLE::DSP_Update(int cycles)
 
   if (m_is_dsp_on_thread)
   {
-    if (m_request_disable_thread || Core::WantsDeterminism())
+    if (m_request_disable_thread)
     {
       DSP_StopSoundStream();
       m_is_dsp_on_thread = false;

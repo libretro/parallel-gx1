@@ -51,7 +51,8 @@ public:
   void Shutdown();
   void Prepare();  // Must be called from the CPU thread.
   void DoState(PointerWrap& f);
-  void UpdateWantDeterminism(bool want);
+  // Sets up the deterministic GPU thread as the GPU determinism mode asks; called while paused.
+  void UpdateDeterministicGPUThread();
   bool UseDeterministicGPUThread() const { return m_use_deterministic_gpu_thread; }
   bool UseSyncGPU() const { return m_config_sync_gpu; }
 

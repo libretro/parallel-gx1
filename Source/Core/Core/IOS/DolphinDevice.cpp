@@ -197,9 +197,6 @@ DolphinDevice::DolphinDevice(EmulationKernel& ios, const std::string& device_nam
 
 IPCReply DolphinDevice::IOCtlV(const IOCtlVRequest& request)
 {
-  if (Core::WantsDeterminism())
-    return IPCReply(IPC_EACCES);
-
   switch (request.request)
   {
   case IOCTL_DOLPHIN_GET_ELAPSED_TIME:

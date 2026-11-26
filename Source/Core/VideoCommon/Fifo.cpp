@@ -531,25 +531,14 @@ int FifoManager::RunGpuOnCpu(int ticks)
   return -available_ticks + GPU_TIME_SLOT_SIZE;
 }
 
-void FifoManager::UpdateWantDeterminism(bool want)
+void FifoManager::UpdateDeterministicGPUThread()
 {
   // We are paused (or not running at all yet), so
   // it should be safe to change this.
-  bool gpu_thread = false;
-  switch (Config::GetGPUDeterminismMode())
-  {
-  case Config::GPUDeterminismMode::Auto:
-    gpu_thread = want;
-    break;
-  case Config::GPUDeterminismMode::Disabled:
-    gpu_thread = false;
-    break;
-  case Config::GPUDeterminismMode::FakeCompletion:
-    gpu_thread = true;
-    break;
-  }
-
-  gpu_thread = gpu_thread && m_system.IsDualCoreMode();
+  // Auto followed determinism, which only a movie wanted.
+  const bool gpu_thread =
+      Config::GetGPUDeterminismMode() == Config::GPUDeterminismMode::FakeCompletion &&
+      m_system.IsDualCoreMode();
 
   if (m_use_deterministic_gpu_thread != gpu_thread)
   {

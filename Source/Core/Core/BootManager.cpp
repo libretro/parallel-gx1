@@ -39,6 +39,7 @@
 #include "Core/HW/Sram.h"
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
+#include "VideoCommon/Fifo.h"
 
 #include "DiscIO/Enums.h"
 
@@ -125,7 +126,7 @@ bool BootCore(Core::System& system, BootParameters* boot)
 
   system.Initialize();
 
-  Core::UpdateWantDeterminism(system, /*initial*/ true);
+  system.GetFifo().UpdateDeterministicGPUThread();
 
   ConfigLoaders::TransferSYSCONFControlToGuest();
 

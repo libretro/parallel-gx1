@@ -408,10 +408,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
 
   if (serno.empty() || serno == "000000000")
   {
-    if (Core::WantsDeterminism())
-      serno = "123456789";
-    else
-      serno = Common::SettingsWriter::GenerateSerialNumber();
+    serno = Common::SettingsWriter::GenerateSerialNumber();
     INFO_LOG(BOOT, "No previous serial number found, generated one instead: %s", serno.c_str());
   }
   else

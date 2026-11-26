@@ -86,12 +86,6 @@ bool USBHost::ShouldAddDevice(const USB::Device& device) const
 
 void USBHost::Update()
 {
-  if (Core::WantsDeterminism())
-  {
-    UpdateFromScanner();
-    return;
-  }
-
   if (USBDeviceList* const pending =
           static_cast<USBDeviceList*>(retro_atomic_exchange_ptr(&m_pending_devices, nullptr)))
   {
@@ -111,8 +105,6 @@ void USBHost::UpdateFromScanner()
 // Scan thread: only the newest list matters, so it replaces any still waiting.
 void USBHost::OnDevicesChanged(const USBDeviceList* new_devices)
 {
-  if (Core::WantsDeterminism())
-    return;
   USBDeviceList* const copy = new USBDeviceList;
   usb_device_list_copy(copy, new_devices);
   FreePendingDevices(

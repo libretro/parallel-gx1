@@ -507,11 +507,6 @@ static void GetSystemDefaultInterfaceOrFallback(DefaultInterface* out)
 
 IPCReply NetIPTopDevice::IOCtl(const IOCtlRequest& request)
 {
-  if (Core::WantsDeterminism())
-  {
-    return IPCReply(IPC_EACCES);
-  }
-
   switch (request.request)
   {
   case IOCTL_SO_INITINTERFACE:
@@ -1093,7 +1088,6 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
     const u32 default_backup_dns_resolver = ntohl(::inet_addr("8.8.4.4"));
     u32 address = 0;
 #ifdef _WIN32
-    if (!Core::WantsDeterminism())
     {
       PIP_ADAPTER_ADDRESSES AdapterAddresses = nullptr;
       ULONG OutBufferLength = 0;
@@ -1155,7 +1149,6 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
     }
 #elif (defined(__linux__) && !defined(ANDROID)) || defined(__APPLE__) || defined(__FreeBSD__) ||   \
     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__)
-    if (!Core::WantsDeterminism())
     {
       if (res_init() == 0)
       {
