@@ -18,6 +18,10 @@ namespace VideoCommon
 class CustomTextureData
 {
 public:
+  CustomTextureData() = default;
+  CustomTextureData(const CustomTextureData&) = delete;
+  CustomTextureData& operator=(const CustomTextureData&) = delete;
+
   void AddRef() { retro_atomic_fetch_add_int(&m_refs, 1); }
   // Deletes the data once the last reference goes
   void Release()
@@ -36,11 +40,22 @@ public:
       u32 height = 0;
       u32 row_length = 0;
     };
-    std::vector<Level> m_levels;
+    // More than a 32-bit extent can halve to 1x1
+    static constexpr u32 MAX_LEVELS = 32;
+    Level m_levels[MAX_LEVELS];
+    u32 m_level_count = 0;
   };
-  std::vector<ArraySlice> m_slices;
+  // Grown by doubling and kept
+  ArraySlice* m_slices = nullptr;
+  u32 m_slice_count = 0;
+  u32 m_slice_capacity = 0;
+
+  // A new slice with no levels at the end, or nullptr when out of memory
+  ArraySlice* AddSlice();
 
 private:
+  ~CustomTextureData() { delete[] m_slices; }
+
   retro_atomic_int_t m_refs{1};
 };
 

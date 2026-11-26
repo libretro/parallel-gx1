@@ -23,12 +23,10 @@ namespace
 std::size_t GetAssetSize(const CustomTextureData& data)
 {
   std::size_t total = 0;
-  for (const auto& slice : data.m_slices)
+  for (u32 slice = 0; slice < data.m_slice_count; slice++)
   {
-    for (const auto& level : slice.m_levels)
-    {
-      total += level.data.size();
-    }
+    for (u32 level = 0; level < data.m_slices[slice].m_level_count; level++)
+      total += data.m_slices[slice].m_levels[level].data.size();
   }
   return total;
 }

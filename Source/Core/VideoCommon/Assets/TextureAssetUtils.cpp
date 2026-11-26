@@ -29,8 +29,14 @@ bool LoadMips(const std::string& asset_path, CustomTextureData::ArraySlice* data
   Common::ToLower(&extension_lower);
 
   // Load additional mip levels
-  for (u32 mip_level = static_cast<u32>(data->m_levels.size());; mip_level++)
+  for (u32 mip_level = data->m_level_count;; mip_level++)
   {
+    if (mip_level == CustomTextureData::ArraySlice::MAX_LEVELS)
+    {
+      ERROR_LOG(VIDEO, "Custom texture '%s' has too many mipmaps", filename.c_str());
+      return true;
+    }
+
     char mip_suffix[24];
     snprintf(mip_suffix, sizeof(mip_suffix), "_mip%u", mip_level);
     const std::string mip_level_filename = filename + mip_suffix;
@@ -39,11 +45,12 @@ bool LoadMips(const std::string& asset_path, CustomTextureData::ArraySlice* data
     if (!File::Exists(full_path))
       return true;
 
-    VideoCommon::CustomTextureData::ArraySlice::Level level;
+    VideoCommon::CustomTextureData::ArraySlice::Level& level = data->m_levels[mip_level];
     if (extension_lower == ".dds")
     {
       if (!LoadDDSTexture(&level, full_path, mip_level))
       {
+        level.data.reset();
         ERROR_LOG(VIDEO, "Custom mipmap '%s' failed to load", mip_level_filename.c_str());
         return false;
       }
@@ -52,6 +59,7 @@ bool LoadMips(const std::string& asset_path, CustomTextureData::ArraySlice* data
     {
       if (!LoadPNGTexture(&level, full_path))
       {
+        level.data.reset();
         ERROR_LOG(VIDEO, "Custom mipmap '%s' failed to load", mip_level_filename.c_str());
         return false;
       }
@@ -62,7 +70,7 @@ bool LoadMips(const std::string& asset_path, CustomTextureData::ArraySlice* data
       return false;
     }
 
-    data->m_levels.push_back(std::move(level));
+    data->m_level_count = mip_level + 1;
   }
 
   return true;
@@ -83,10 +91,10 @@ bool LoadTextureDataFromFile(const CustomAssetLibrary::AssetID& asset_id,
       return false;
     }
 
-    if (data->m_slices.empty()) [[unlikely]]
-      data->m_slices.emplace_back();
+    if (!data->m_slice_count && !data->AddSlice()) [[unlikely]]
+      return false;
 
-    if (!LoadMips(asset_path, data->m_slices.data()))
+    if (!LoadMips(asset_path, data->m_slices))
       return false;
 
     return true;
@@ -104,15 +112,15 @@ bool LoadTextureDataFromFile(const CustomAssetLibrary::AssetID& asset_id,
     }
 
     // If we have no slices, create one
-    if (data->m_slices.empty())
-      data->m_slices.emplace_back();
+    if (!data->m_slice_count && !data->AddSlice())
+      return false;
 
     auto& slice = data->m_slices[0];
     // If we have no levels, create one to pass into LoadPNGTexture
-    if (slice.m_levels.empty())
-      slice.m_levels.emplace_back();
+    if (!slice.m_level_count)
+      slice.m_level_count = 1;
 
-    if (!LoadPNGTexture(slice.m_levels.data(), asset_path))
+    if (!LoadPNGTexture(slice.m_levels, asset_path))
     {
       ERROR_LOG(VIDEO, "Asset '%s' error - could not load png texture!", asset_id.c_str());
       return false;
@@ -131,7 +139,7 @@ bool LoadTextureDataFromFile(const CustomAssetLibrary::AssetID& asset_id,
 bool ValidateTextureData(const CustomAssetLibrary::AssetID& asset_id, const CustomTextureData& data,
                          u32 native_width, u32 native_height)
 {
-  if (data.m_slices.empty())
+  if (!data.m_slice_count)
   {
     ERROR_LOG(VIDEO,
               "Texture data can't be validated for asset '%s' because no data was available.",
@@ -139,7 +147,7 @@ bool ValidateTextureData(const CustomAssetLibrary::AssetID& asset_id, const Cust
     return false;
   }
 
-  if (data.m_slices.size() > 1)
+  if (data.m_slice_count > 1)
   {
     ERROR_LOG(
         VIDEO,
@@ -149,7 +157,7 @@ bool ValidateTextureData(const CustomAssetLibrary::AssetID& asset_id, const Cust
   }
 
   const auto& slice = data.m_slices[0];
-  if (slice.m_levels.empty())
+  if (!slice.m_level_count)
   {
     ERROR_LOG(
         VIDEO,
@@ -191,7 +199,7 @@ bool ValidateTextureData(const CustomAssetLibrary::AssetID& asset_id, const Cust
 bool PurgeInvalidMipsFromTextureData(const CustomAssetLibrary::AssetID& asset_id,
                                      CustomTextureData* data)
 {
-  for (std::size_t slice_index = 0; slice_index < data->m_slices.size(); slice_index++)
+  for (u32 slice_index = 0; slice_index < data->m_slice_count; slice_index++)
   {
     auto& slice = data->m_slices[slice_index];
     const auto& first_mip = slice.m_levels[0];
@@ -199,7 +207,7 @@ bool PurgeInvalidMipsFromTextureData(const CustomAssetLibrary::AssetID& asset_id
     // Verify that each mip level is the correct size (divide by 2 each time).
     u32 current_mip_width = first_mip.width;
     u32 current_mip_height = first_mip.height;
-    for (u32 mip_level = 1; mip_level < static_cast<u32>(slice.m_levels.size()); mip_level++)
+    for (u32 mip_level = 1; mip_level < slice.m_level_count; mip_level++)
     {
       if (current_mip_width != 1 || current_mip_height != 1)
       {
@@ -228,13 +236,15 @@ bool PurgeInvalidMipsFromTextureData(const CustomAssetLibrary::AssetID& asset_id
       }
 
       // Drop this mip level and any others after it.
-      while (slice.m_levels.size() > mip_level)
-        slice.m_levels.pop_back();
+      while (slice.m_level_count > mip_level)
+        slice.m_levels[--slice.m_level_count].data.reset();
     }
 
     // All levels have to have the same format.
-    if (std::ranges::any_of(slice.m_levels,
-                            [&first_mip](const auto& l) { return l.format != first_mip.format; }))
+    bool consistent_format = true;
+    for (u32 mip_level = 1; mip_level < slice.m_level_count; mip_level++)
+      consistent_format = consistent_format && slice.m_levels[mip_level].format == first_mip.format;
+    if (!consistent_format)
     {
       ERROR_LOG(
           VIDEO,

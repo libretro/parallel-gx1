@@ -2128,7 +2128,7 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
   RcTcacheEntry entry;
   if (custom_texture_data)
   {
-    const u32 texLevels = no_mips ? 1 : (u32)custom_texture_data->m_slices[0].m_levels.size();
+    const u32 texLevels = no_mips ? 1 : custom_texture_data->m_slices[0].m_level_count;
     const auto& first_level = custom_texture_data->m_slices[0].m_levels[0];
     const TextureConfig config(first_level.width, first_level.height, texLevels, 1, 1,
                                first_level.format, 0, AbstractTextureType::Texture_2DArray);
@@ -2136,8 +2136,7 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
     if (!entry) [[unlikely]]
       return entry;
     const auto& slice = custom_texture_data->m_slices[0];
-    for (u32 level_index = 0;
-         level_index < std::min(texLevels, static_cast<u32>(slice.m_levels.size())); ++level_index)
+    for (u32 level_index = 0; level_index < std::min(texLevels, slice.m_level_count); ++level_index)
     {
       const auto& level = slice.m_levels[level_index];
       entry->texture->Load(level_index, level.width, level.height, level.row_length,
