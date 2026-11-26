@@ -388,10 +388,15 @@ void FileSystem::DoState(PointerWrap& p)
   bool is_full_nand_in_state = false;
   p.Do(is_full_nand_in_state);
   u32 size_of_nand = 0;
+  const bool is_reading = p.IsReadMode();
+  u8* const buffer = static_cast<u8*>(std::malloc(STATE_CHUNK_SIZE));
+  if (!buffer)
+    p.SetVerifyMode();
 
-  if (!p.IsReadMode())
+  if (!is_reading)
   {
-    DoStateWriteOrMeasure(p, "/tmp");
+    if (buffer)
+      DoStateWriteOrMeasure(p, "/tmp", buffer);
     p.Do(size_of_nand);
 
     for (i = 0; i < NUM_HANDLES; i++)
@@ -399,9 +404,11 @@ void FileSystem::DoState(PointerWrap& p)
   }
   else
   {
-    DoStateRead(p, "/tmp");
+    if (buffer)
+      DoStateRead(p, "/tmp", buffer);
     (void)p.DoExternal(size_of_nand);
   }
+  std::free(buffer);
 
   for (i = 0; i < NUM_HANDLES; i++)
   {

@@ -279,8 +279,10 @@ public:
   Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const char* path);
 
 protected:
-  void DoStateWriteOrMeasure(PointerWrap& p, const std::string& directory_path);
-  void DoStateRead(PointerWrap& p, const std::string& directory_path);
+  /// Savestated files go through a buffer of this size, given to the directory walks below.
+  static constexpr u32 STATE_CHUNK_SIZE = 65536;
+  void DoStateWriteOrMeasure(PointerWrap& p, const char* directory_path, u8* buffer);
+  void DoStateRead(PointerWrap& p, const char* directory_path, u8* buffer);
 
 private:
   struct FstEntry

@@ -17,8 +17,6 @@
 
 namespace IOS::HLE::FS
 {
-constexpr u32 BUFFER_CHUNK_SIZE = 65536;
-
 bool IsValidPath(std::string_view path)
 {
   return path == "/" || IsValidNonRootPath(path);
@@ -169,12 +167,36 @@ ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const char* path, FileAt
   }
 }
 
-void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
+// Names are saved as strings were: their length, then their characters.
+static bool DoStateName(PointerWrap& p, char (&name)[MaxFilenameLength + 1])
 {
-  const ResultCode delete_result = Delete(0, 0, directory_path.c_str());
+  u32 length = static_cast<u32>(std::strlen(name));
+  p.Do(length);
+  if (length > MaxFilenameLength)
+    return false;
+  p.DoArray(name, length);
+  name[length] = '\0';
+  return true;
+}
+
+static bool BuildChildPath(const char* directory_path, const char* name,
+                           char (&child_path)[MaxPathLength + 1])
+{
+  const int length = std::snprintf(child_path, sizeof(child_path), "%s/%s", directory_path, name);
+  if (length < 0 || static_cast<size_t>(length) >= sizeof(child_path))
+  {
+    ERROR_LOG(IOS_FS, "Savestate path %s/%s is too long", directory_path, name);
+    return false;
+  }
+  return true;
+}
+
+void FileSystem::DoStateRead(PointerWrap& p, const char* directory_path, u8* buffer)
+{
+  const ResultCode delete_result = Delete(0, 0, directory_path);
   if (delete_result != ResultCode::Success && delete_result != ResultCode::NotFound)
   {
-    ERROR_LOG(IOS_FS, "DoStateRead failed to call Delete for %s: %u", directory_path.c_str(),
+    ERROR_LOG(IOS_FS, "DoStateRead failed to call Delete for %s: %u", directory_path,
               static_cast<unsigned>(delete_result));
     p.SetVerifyMode();
     return;
@@ -191,96 +213,95 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
 
   // UID 0 is used to avoid AccessDenied.
   const ResultCode create_directory_result =
-      CreateDirectory(0, 0, directory_path.c_str(), metadata.attribute, metadata.modes);
+      CreateDirectory(0, 0, directory_path, metadata.attribute, metadata.modes);
   if (create_directory_result != ResultCode::Success)
   {
-    ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateDirectory for %s: %u",
-              directory_path.c_str(), static_cast<unsigned>(create_directory_result));
+    ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateDirectory for %s: %u", directory_path,
+              static_cast<unsigned>(create_directory_result));
     p.SetVerifyMode();
     return;
   }
 
   // Change the UID and GID from 0 to the intended values.
-  const ResultCode set_metadata_result = SetMetadata(
-      0, directory_path.c_str(), metadata.uid, metadata.gid, metadata.attribute, metadata.modes);
+  const ResultCode set_metadata_result = SetMetadata(0, directory_path, metadata.uid, metadata.gid,
+                                                     metadata.attribute, metadata.modes);
   if (set_metadata_result != ResultCode::Success)
   {
-    ERROR_LOG(IOS_FS, "DoStateRead failed to call SetMetadata for %s: %u", directory_path.c_str(),
+    ERROR_LOG(IOS_FS, "DoStateRead failed to call SetMetadata for %s: %u", directory_path,
               static_cast<unsigned>(set_metadata_result));
     p.SetVerifyMode();
     return;
   }
 
   // Now restore from the stream
-  std::vector<std::string> children;
-  p.DoEachElement(children, [this, &directory_path](PointerWrap& p_, std::string& child_name) {
+  u32 child_count = 0;
+  p.Do(child_count);
+  for (u32 child = 0; child < child_count && p.IsReadMode(); child++)
+  {
     Metadata child_metadata;
-    p_.Do(child_metadata);
-    p_.Do(child_name);
-
-    std::string child_path;
-    child_path.reserve(directory_path.size() + child_name.size() + 1);
-    child_path.append(directory_path);
-    if (directory_path.back() != '/')
-      child_path.push_back('/');
-    child_path.append(child_name);
+    char child_name[MaxFilenameLength + 1] = "";
+    char child_path[MaxPathLength + 1];
+    p.Do(child_metadata);
+    if (!DoStateName(p, child_name) || !BuildChildPath(directory_path, child_name, child_path))
+    {
+      p.SetVerifyMode();
+      break;
+    }
 
     if (child_metadata.is_file)
     {
       // UID 0 is used to avoid AccessDenied.
       const ResultCode create_file_result =
-          CreateFile(0, 0, child_path.c_str(), child_metadata.attribute, child_metadata.modes);
+          CreateFile(0, 0, child_path, child_metadata.attribute, child_metadata.modes);
       if (create_file_result != ResultCode::Success)
       {
-        ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateFile for %s: %u", child_path.c_str(),
+        ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateFile for %s: %u", child_path,
                   static_cast<unsigned>(create_file_result));
-        p_.SetVerifyMode();
-        return;
+        p.SetVerifyMode();
+        continue;
       }
 
       // Change the UID and GID from 0 to the intended values.
       const ResultCode child_metadata_result =
-          SetMetadata(0, child_path.c_str(), child_metadata.uid, child_metadata.gid,
+          SetMetadata(0, child_path, child_metadata.uid, child_metadata.gid,
                       child_metadata.attribute, child_metadata.modes);
       if (child_metadata_result != ResultCode::Success)
       {
-        ERROR_LOG(IOS_FS, "DoStateRead failed to call SetMetadata for %s: %u", child_path.c_str(),
+        ERROR_LOG(IOS_FS, "DoStateRead failed to call SetMetadata for %s: %u", child_path,
                   static_cast<unsigned>(child_metadata_result));
-        p_.SetVerifyMode();
-        return;
+        p.SetVerifyMode();
+        continue;
       }
 
-      u8 buffer[BUFFER_CHUNK_SIZE];
-      Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Write);
+      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Write);
       if (!handle)
       {
-        ERROR_LOG(IOS_FS, "DoStateRead failed to call OpenFile for %s: %u", child_path.c_str(),
+        ERROR_LOG(IOS_FS, "DoStateRead failed to call OpenFile for %s: %u", child_path,
                   static_cast<unsigned>(handle.error()));
-        p_.SetVerifyMode();
-        return;
+        p.SetVerifyMode();
+        continue;
       }
 
       u32 i = 0;
       while (i < child_metadata.size)
       {
-        const u32 bytes_to_write =
-            std::min(child_metadata.size - i, static_cast<u32>(ARRAY_SIZE(buffer)));
-        p_.DoArray(buffer, bytes_to_write);
+        const u32 bytes_to_write = std::min(child_metadata.size - i, STATE_CHUNK_SIZE);
+        p.DoArray(buffer, bytes_to_write);
 
         Result<size_t> write_result = handle->Write(buffer, bytes_to_write);
         if (!write_result)
         {
-          ERROR_LOG(IOS_FS, "DoStateRead failed to call Write for %s: %u", child_path.c_str(),
+          ERROR_LOG(IOS_FS, "DoStateRead failed to call Write for %s: %u", child_path,
                     static_cast<unsigned>(write_result.error()));
-          p_.SetVerifyMode();
-          return;
+          p.SetVerifyMode();
+          break;
         }
         if (*write_result != bytes_to_write)
         {
           ERROR_LOG(IOS_FS, "DoStateRead tried to write %s bytes to %u but wrote %" PRIu64 " bytes",
-                    child_path.c_str(), bytes_to_write, (u64)(*write_result));
-          p_.SetVerifyMode();
-          return;
+                    child_path, bytes_to_write, (u64)(*write_result));
+          p.SetVerifyMode();
+          break;
         }
 
         i += bytes_to_write;
@@ -288,18 +309,18 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
     }
     else
     {
-      DoStateRead(p_, child_path);
+      DoStateRead(p, child_path, buffer);
     }
-  });
+  }
 }
 
-void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& directory_path)
+void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_path, u8* buffer)
 {
-  const Result<Metadata> metadata = GetMetadata(0, 0, directory_path.c_str());
+  const Result<Metadata> metadata = GetMetadata(0, 0, directory_path);
   if (!metadata)
   {
-    ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u",
-              directory_path.c_str(), static_cast<unsigned>(metadata.error()));
+    ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u", directory_path,
+              static_cast<unsigned>(metadata.error()));
     p.SetVerifyMode();
     return;
   }
@@ -312,11 +333,11 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
   p.Do(metadata->fst_index);
 
   DirectoryList children;
-  const ResultCode list_result = ReadDirectory(0, 0, directory_path.c_str(), &children);
+  const ResultCode list_result = ReadDirectory(0, 0, directory_path, &children);
   if (list_result != ResultCode::Success)
   {
     ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call ReadDirectory for %s: %u",
-              directory_path.c_str(), static_cast<unsigned>(list_result));
+              directory_path, static_cast<unsigned>(list_result));
     p.SetVerifyMode();
     return;
   }
@@ -325,34 +346,33 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
   p.Do(child_count);
   for (u32 child = 0; child < child_count; child++)
   {
-    std::string child_name = children.names[child];
-    std::string child_path;
-    child_path.reserve(directory_path.size() + child_name.size() + 1);
-    child_path.append(directory_path);
-    if (directory_path.back() != '/')
-      child_path.push_back('/');
-    child_path.append(child_name);
+    char child_path[MaxPathLength + 1];
+    char* const child_name = children.names[child];
+    if (!BuildChildPath(directory_path, child_name, child_path))
+    {
+      p.SetVerifyMode();
+      continue;
+    }
 
-    Result<Metadata> child_metadata = GetMetadata(0, 0, child_path.c_str());
+    Result<Metadata> child_metadata = GetMetadata(0, 0, child_path);
     if (!child_metadata)
     {
-      ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u",
-                child_name.c_str(), static_cast<unsigned>(child_metadata.error()));
+      ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u", child_name,
+                static_cast<unsigned>(child_metadata.error()));
       p.SetVerifyMode();
       continue;
     }
 
     p.Do(*child_metadata);
-    p.Do(child_name);
+    DoStateName(p, children.names[child]);
 
     if (child_metadata->is_file)
     {
-      u8 buffer[BUFFER_CHUNK_SIZE];
-      Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Read);
+      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Read);
       if (!handle)
       {
-        ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call OpenFile for %s: %u",
-                  child_name.c_str(), static_cast<unsigned>(handle.error()));
+        ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call OpenFile for %s: %u", child_name,
+                  static_cast<unsigned>(handle.error()));
         p.SetVerifyMode();
         continue;
       }
@@ -360,13 +380,12 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
       u32 i = 0;
       while (i < child_metadata->size)
       {
-        const u32 bytes_to_read =
-            std::min(child_metadata->size - i, static_cast<u32>(ARRAY_SIZE(buffer)));
+        const u32 bytes_to_read = std::min(child_metadata->size - i, STATE_CHUNK_SIZE);
         Result<size_t> read_result = handle->Read(buffer, bytes_to_read);
         if (!read_result)
         {
-          ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u",
-                    child_name.c_str(), static_cast<unsigned>(read_result.error()));
+          ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u", child_name,
+                    static_cast<unsigned>(read_result.error()));
           p.SetVerifyMode();
           break;
         }
@@ -375,7 +394,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
           ERROR_LOG(IOS_FS,
                     "DoStateWriteOrMeasure tried to read %s bytes from %u but got %" PRIu64
                     " bytes",
-                    child_name.c_str(), bytes_to_read, (u64)(*read_result));
+                    child_name, bytes_to_read, (u64)(*read_result));
           p.SetVerifyMode();
           break;
         }
@@ -386,7 +405,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
     }
     else
     {
-      DoStateWriteOrMeasure(p, child_path);
+      DoStateWriteOrMeasure(p, child_path, buffer);
     }
   }
   FreeDirectoryList(&children);
