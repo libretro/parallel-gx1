@@ -48,13 +48,13 @@ void NWC24Config::WriteConfig() const
   WriteConfigToPath(CONFIG_PATH);
 }
 
-void NWC24Config::WriteConfigToPath(const std::string& path) const
+void NWC24Config::WriteConfigToPath(const char* path) const
 {
   constexpr FS::Modes public_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite};
-  m_fs->CreateFullPath(PID_KD, PID_KD, path.c_str(), 0, public_modes);
-  const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, path.c_str(), public_modes);
+  m_fs->CreateFullPath(PID_KD, PID_KD, path, 0, public_modes);
+  const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, path, public_modes);
   if (!file || !file->Write(&m_data, 1))
-    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 config file at %s", path.c_str());
+    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 config file at %s", path);
 }
 
 void NWC24Config::ResetConfig()
@@ -212,45 +212,50 @@ void NWC24Config::SetEmail(const char* email)
   m_data.email[MAX_EMAIL_LENGTH - 1] = '\0';
 }
 
-std::string_view NWC24Config::GetMlchkid() const
+// Copies a fixed-size field, which may lack a terminator, into a terminated buffer.
+static void CopyField(const char* field, size_t field_size, char* out, size_t out_size)
 {
-  const size_t size = strnlen(m_data.mlchkid, MAX_MLCHKID_LENGTH);
-  return {m_data.mlchkid, size};
+  size_t size = strnlen(field, field_size);
+  if (size >= out_size)
+    size = out_size - 1;
+  std::memcpy(out, field, size);
+  out[size] = '\0';
 }
 
-std::string NWC24Config::GetCheckURL() const
+void NWC24Config::GetMlchkid(char* out, size_t out_size) const
 {
-  const size_t size = strnlen(m_data.http_urls[1], MAX_URL_LENGTH);
-  return {m_data.http_urls[1], size};
+  CopyField(m_data.mlchkid, MAX_MLCHKID_LENGTH, out, out_size);
 }
 
-std::string NWC24Config::GetAccountURL() const
+void NWC24Config::GetCheckURL(char* out, size_t out_size) const
 {
-  const size_t size = strnlen(m_data.http_urls[0], MAX_URL_LENGTH);
-  return {m_data.http_urls[0], size};
+  CopyField(m_data.http_urls[1], MAX_URL_LENGTH, out, out_size);
 }
 
-void NWC24Config::SetMailCheckID(std::string_view mlchkid)
+void NWC24Config::GetAccountURL(char* out, size_t out_size) const
 {
-  std::strncpy(m_data.mlchkid, mlchkid.data(), std::size(m_data.mlchkid));
+  CopyField(m_data.http_urls[0], MAX_URL_LENGTH, out, out_size);
+}
+
+void NWC24Config::SetMailCheckID(const char* mlchkid)
+{
+  std::strncpy(m_data.mlchkid, mlchkid, sizeof(m_data.mlchkid));
   m_data.mlchkid[MAX_MLCHKID_LENGTH - 1] = '\0';
 }
 
-void NWC24Config::SetPassword(std::string_view password)
+void NWC24Config::SetPassword(const char* password)
 {
-  std::strncpy(m_data.paswd, password.data(), std::size(m_data.paswd));
+  std::strncpy(m_data.paswd, password, sizeof(m_data.paswd));
   m_data.paswd[MAX_PASSWORD_LENGTH - 1] = '\0';
 }
 
-std::string NWC24Config::GetSendURL() const
+void NWC24Config::GetSendURL(char* out, size_t out_size) const
 {
-  const size_t size = strnlen(m_data.http_urls[4], MAX_URL_LENGTH);
-  return {m_data.http_urls[4], size};
+  CopyField(m_data.http_urls[4], MAX_URL_LENGTH, out, out_size);
 }
 
-std::string_view NWC24Config::GetPassword() const
+void NWC24Config::GetPassword(char* out, size_t out_size) const
 {
-  const size_t size = strnlen(m_data.paswd, MAX_PASSWORD_LENGTH);
-  return {m_data.paswd, size};
+  CopyField(m_data.paswd, MAX_PASSWORD_LENGTH, out, out_size);
 }
 }  // namespace IOS::HLE::NWC24

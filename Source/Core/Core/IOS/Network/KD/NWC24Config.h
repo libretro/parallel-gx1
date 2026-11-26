@@ -3,8 +3,8 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
-#include <string>
 #include "Common/CommonTypes.h"
 
 namespace IOS::HLE
@@ -53,7 +53,7 @@ public:
   void ReadConfig();
   void WriteCBK() const;
   void WriteConfig() const;
-  void WriteConfigToPath(const std::string& path) const;
+  void WriteConfigToPath(const char* path) const;
   void ResetConfig();
 
   u32 CalculateNwc24ConfigChecksum() const;
@@ -72,10 +72,14 @@ public:
   u32 Checksum() const;
   void SetChecksum(u32 checksum);
 
-  std::string_view GetMlchkid() const;
-  std::string GetCheckURL() const;
-  std::string GetSendURL() const;
-  std::string_view GetPassword() const;
+  // Buffer sizes for the getters below, terminator included; they cut longer values short.
+  static constexpr size_t URL_SIZE = 0x80 + 1;
+  static constexpr size_t MLCHKID_SIZE = 0x24 + 1;
+  static constexpr size_t PASSWORD_SIZE = 0x20 + 1;
+  void GetMlchkid(char* out, size_t out_size) const;
+  void GetCheckURL(char* out, size_t out_size) const;
+  void GetSendURL(char* out, size_t out_size) const;
+  void GetPassword(char* out, size_t out_size) const;
 
   NWC24CreationStage CreationStage() const;
   void SetCreationStage(NWC24CreationStage creation_stage);
@@ -92,9 +96,9 @@ public:
   const char* Email() const;
   void SetEmail(const char* email);
 
-  std::string GetAccountURL() const;
-  void SetMailCheckID(std::string_view mlchkid);
-  void SetPassword(std::string_view password);
+  void GetAccountURL(char* out, size_t out_size) const;
+  void SetMailCheckID(const char* mlchkid);
+  void SetPassword(const char* password);
 
 private:
   enum

@@ -3,8 +3,8 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
-#include <string>
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Network/KD/WC24File.h"
 
@@ -37,9 +37,12 @@ public:
   bool HasSubtask(u16 entry_index) const;
   bool IsSubtaskDownloadDisabled(u16 entry_index) const;
   bool IsValidSubtask(u16 entry_index, u8 subtask_id) const;
-  std::string GetVFFContentName(u16 entry_index, s32 subtask_id) const;
-  std::string GetDownloadURL(u16 entry_index, s32 subtask_id) const;
-  std::string GetVFFPath(u16 entry_index) const;
+  // Buffer sizes for the getters below, terminator included; they cut longer values short.
+  static constexpr size_t VFF_CONTENT_NAME_SIZE = 64 + 4;
+  static constexpr size_t DOWNLOAD_URL_SIZE = 236 + 4;
+  void GetVFFContentName(u16 entry_index, s32 subtask_id, char* out, size_t out_size) const;
+  void GetDownloadURL(u16 entry_index, s32 subtask_id, char* out, size_t out_size) const;
+  void GetVFFPath(u16 entry_index, char* out, size_t out_size) const;
   bool GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const;
 
   u64 GetNextDownloadTime(u16 record_index) const;

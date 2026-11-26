@@ -92,43 +92,46 @@ bool NWC24Dl::DoesEntryExist(u16 entry_index) const
   return m_data.entries[entry_index].low_title_id != 0;
 }
 
-std::string NWC24Dl::GetDownloadURL(u16 entry_index, s32 subtask_id) const
+// Writes a fixed-size field, which may lack a terminator, followed by ".NN" when append_subtask.
+static void FormatWithSubtask(const char* field, size_t field_size, bool append_subtask,
+                              s32 subtask_id, char* out, size_t out_size)
+{
+  const int size = static_cast<int>(strnlen(field, field_size));
+  if (append_subtask)
+    snprintf(out, out_size, "%.*s.%02d", size, field, (unsigned)subtask_id);
+  else
+    snprintf(out, out_size, "%.*s", size, field);
+}
+
+void NWC24Dl::GetDownloadURL(u16 entry_index, s32 subtask_id, char* out, size_t out_size) const
 {
   ASSERT(!IsDisabled());
-  std::string url(m_data.entries[entry_index].dl_url);
-
+  const auto& entry = m_data.entries[entry_index];
   // Determine if we need to append the subtask to the URL.
-  if (subtask_id != NO_SUBTASK &&
-      Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 1))
-  {
-    url.append(StringFromFormat(".%02d", (unsigned)subtask_id));
-  }
-
-  return url;
+  FormatWithSubtask(entry.dl_url, sizeof(entry.dl_url),
+                    subtask_id != NO_SUBTASK &&
+                        Common::ExtractBit(Common::swap32(entry.subtask_bitmask), 1),
+                    subtask_id, out, out_size);
 }
 
-std::string NWC24Dl::GetVFFContentName(u16 entry_index, s32 subtask_id) const
+void NWC24Dl::GetVFFContentName(u16 entry_index, s32 subtask_id, char* out, size_t out_size) const
 {
   ASSERT(!IsDisabled());
-  std::string content(m_data.entries[entry_index].filename);
-
+  const auto& entry = m_data.entries[entry_index];
   // Determine if we need to append the subtask to the name.
-  if (subtask_id != NO_SUBTASK &&
-      Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 0))
-  {
-    content.append(StringFromFormat(".%02d", (unsigned)subtask_id));
-  }
-
-  return content;
+  FormatWithSubtask(entry.filename, sizeof(entry.filename),
+                    subtask_id != NO_SUBTASK &&
+                        Common::ExtractBit(Common::swap32(entry.subtask_bitmask), 0),
+                    subtask_id, out, out_size);
 }
 
-std::string NWC24Dl::GetVFFPath(u16 entry_index) const
+void NWC24Dl::GetVFFPath(u16 entry_index, char* out, size_t out_size) const
 {
   ASSERT(!IsDisabled());
   const u32 lower_title_id = Common::swap32(m_data.entries[entry_index].low_title_id);
   const u32 high_title_id = Common::swap32(m_data.entries[entry_index].high_title_id);
 
-  return StringFromFormat("/title/%08x/%08x/data/wc24dl.vff", lower_title_id, high_title_id);
+  snprintf(out, out_size, "/title/%08x/%08x/data/wc24dl.vff", lower_title_id, high_title_id);
 }
 
 bool NWC24Dl::GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const
@@ -137,10 +140,10 @@ bool NWC24Dl::GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const
   const u32 lower_title_id = Common::swap32(m_data.entries[entry_index].low_title_id);
   const u32 high_title_id = Common::swap32(m_data.entries[entry_index].high_title_id);
 
-  const std::string path =
-      StringFromFormat("/title/%08x/%08x/data/wc24pubk.mod", lower_title_id, high_title_id);
+  char path[64];
+  snprintf(path, sizeof(path), "/title/%08x/%08x/data/wc24pubk.mod", lower_title_id, high_title_id);
 
-  const auto file = m_fs->OpenFile(PID_KD, PID_KD, path.c_str(), IOS::HLE::FS::Mode::Read);
+  const auto file = m_fs->OpenFile(PID_KD, PID_KD, path, IOS::HLE::FS::Mode::Read);
   if (!file)
     return false;
 
