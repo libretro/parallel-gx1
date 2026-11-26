@@ -156,7 +156,7 @@ private:
   static bool EmulatedBS2_GC(Core::System& system, const DiscIO::VolumeDisc& volume);
   static bool EmulatedBS2_Wii(Core::System& system, const DiscIO::VolumeDisc& volume);
   static bool EmulatedBS2(Core::System& system, bool is_wii, const DiscIO::VolumeDisc& volume);
-  static bool Load_BS2(Core::System& system, const std::string& boot_rom_filename);
+  static bool Load_BS2(Core::System& system, const char* boot_rom_filename);
 
   static void SetupGCMemory(Core::System& system);
   static bool SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType console_type);

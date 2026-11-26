@@ -80,7 +80,7 @@ public:
   u32 GetFrameCount() const { return m_num_frames; }
 
   // Freed with delete
-  static FifoDataFile* Load(const std::string& filename, bool flagsOnly);
+  static FifoDataFile* Load(const char* filename, bool flagsOnly);
 
 private:
   enum

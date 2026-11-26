@@ -108,7 +108,7 @@ static bool InFile(u64 offset, u64 size, u64 file_size)
   return offset <= file_size && size <= file_size - offset;
 }
 
-FifoDataFile* FifoDataFile::Load(const std::string& filename, bool flagsOnly)
+FifoDataFile* FifoDataFile::Load(const char* filename, bool flagsOnly)
 {
   File::IOFile file;
   file.Open(filename, "rb");

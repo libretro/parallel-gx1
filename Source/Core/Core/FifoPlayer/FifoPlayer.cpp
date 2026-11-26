@@ -214,7 +214,7 @@ void FifoPlayer::FreeFrameInfo()
   m_frame_info_count = 0;
 }
 
-bool FifoPlayer::Open(const std::string& filename)
+bool FifoPlayer::Open(const char* filename)
 {
   Close();
 

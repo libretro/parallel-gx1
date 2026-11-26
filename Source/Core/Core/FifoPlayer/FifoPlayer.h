@@ -116,7 +116,7 @@ public:
   FifoPlayer& operator=(FifoPlayer&&) = delete;
   ~FifoPlayer();
 
-  bool Open(const std::string& filename);
+  bool Open(const char* filename);
   void Close();
 
   // Returns a CPUCoreBase instance that can be injected into PowerPC as a

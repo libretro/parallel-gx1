@@ -444,7 +444,7 @@ bool CBoot::DVDReadDiscID(Core::System& system, const DiscIO::VolumeDisc& disc, 
 // If ipl.bin is not found, this function does *some* of what BS1 does:
 // loading IPL(BS2) and jumping to it.
 // It does not initialize the hardware or anything else like BS1 does.
-bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
+bool CBoot::Load_BS2(Core::System& system, const char* boot_rom_filename)
 {
   // CRC32 hashes of the IPL file, obtained from Redump
   // DOL-001(USA) / DOL-001(JPN) / DOT-001 / SL-GC10 (NTSC Revision 1.0)
@@ -466,18 +466,26 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
 
   // Load the IPL ROM dump, limited to 2MiB which is the size of the official IPLs.
   constexpr size_t max_ipl_size = 2 * 1024 * 1024;
-  std::vector<u8> data;
+  // a copy, as the descrambler rewrites it
+  u8* data;
+  size_t data_size;
   {
     File::IOFile file(boot_rom_filename, "rb");
     if (!file)
       return false;
 
-    data.resize(static_cast<size_t>(std::min<u64>(file.GetSize(), max_ipl_size)));
-    if (!file.ReadArray(data.data(), data.size()))
+    data_size = static_cast<size_t>(std::min<u64>(file.GetSize(), max_ipl_size));
+    data = static_cast<u8*>(std::malloc(data_size ? data_size : 1));
+    if (!data)
       return false;
+    if (!file.ReadArray(data, data_size))
+    {
+      std::free(data);
+      return false;
+    }
   }
 
-  const u32 ipl_hash = common_crc32_compute(data.data(), data.size());
+  const u32 ipl_hash = common_crc32_compute(data, data_size);
   bool known_ipl = false;
   bool pal_ipl = false;
   switch (ipl_hash)
@@ -510,10 +518,10 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
   }
 
   // Run the descrambler over the encrypted section containing BS1/BS2
-  if (data.size() > 0x100)
+  if (data_size > 0x100)
   {
     ExpansionInterface::CEXIIPL::Descrambler(
-        data.data() + 0x100, static_cast<u32>(std::min<size_t>(data.size() - 0x100, 0x1AFE00)));
+        data + 0x100, static_cast<u32>(std::min<size_t>(data_size - 0x100, 0x1AFE00)));
   }
 
   // TODO: Execution is supposed to start at 0xFFF00000, not 0x81200000;
@@ -521,15 +529,11 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
   // For now, HLE the first few instructions and start at 0x81200150
   // to work around this.
   auto& memory = system.GetMemory();
-  if (data.size() > 0x100)
-  {
-    memory.CopyToEmu(0x01200000, data.data() + 0x100, std::min<size_t>(data.size() - 0x100, 0x700));
-  }
-  if (data.size() > 0x820)
-  {
-    memory.CopyToEmu(0x01300000, data.data() + 0x820,
-                     std::min<size_t>(data.size() - 0x820, 0x1AFE00));
-  }
+  if (data_size > 0x100)
+    memory.CopyToEmu(0x01200000, data + 0x100, std::min<size_t>(data_size - 0x100, 0x700));
+  if (data_size > 0x820)
+    memory.CopyToEmu(0x01300000, data + 0x820, std::min<size_t>(data_size - 0x820, 0x1AFE00));
+  std::free(data);
 
   auto& ppc_state = system.GetPPCState();
   ppc_state.gpr[3] = 0xfff0001f;
