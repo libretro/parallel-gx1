@@ -40,14 +40,6 @@ namespace PowerPC
 struct PowerPCState;
 }
 
-struct RegionSetting
-{
-  std::string area;
-  std::string video;
-  std::string game;
-  std::string code;
-};
-
 class BootExecutableReader;
 
 class BootSessionData

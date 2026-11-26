@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -352,16 +351,46 @@ static DiscIO::Region CodeRegion(char c)
 
 bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType console_type)
 {
-  static const std::map<DiscIO::Region, const RegionSetting> region_settings = {
-      {DiscIO::Region::NTSC_J, {"JPN", "NTSC", "JP", "LJH"}},
-      {DiscIO::Region::NTSC_U, {"USA", "NTSC", "US", "LU"}},
-      {DiscIO::Region::PAL, {"EUR", "PAL", "EU", "LEH"}},
-      {DiscIO::Region::NTSC_K, {"KOR", "NTSC", "KR", "LKH"}}};
-  auto entryPos = region_settings.find(SConfig::GetInstance().m_region);
-  RegionSetting region_setting = entryPos->second;
+  static const struct
+  {
+    DiscIO::Region region;
+    const char* area;
+    const char* video;
+    const char* game;
+    const char* code;
+  } region_settings[] = {{DiscIO::Region::NTSC_J, "JPN", "NTSC", "JP", "LJH"},
+                         {DiscIO::Region::NTSC_U, "USA", "NTSC", "US", "LU"},
+                         {DiscIO::Region::PAL, "EUR", "PAL", "EU", "LEH"},
+                         {DiscIO::Region::NTSC_K, "KOR", "NTSC", "KR", "LKH"}};
+  // The settings, the region's defaults unless setting.txt has them for this region
+  struct
+  {
+    char area[SETTINGS_VALUE_SIZE];
+    char video[SETTINGS_VALUE_SIZE];
+    char game[SETTINGS_VALUE_SIZE];
+    char code[SETTINGS_VALUE_SIZE];
+  } region_setting = {};
+  const char* default_area = "";
+  for (size_t i = 0; i < sizeof(region_settings) / sizeof(region_settings[0]); i++)
+  {
+    if (region_settings[i].region == SConfig::GetInstance().m_region)
+    {
+      std::snprintf(region_setting.area, sizeof(region_setting.area), "%s",
+                    region_settings[i].area);
+      std::snprintf(region_setting.video, sizeof(region_setting.video), "%s",
+                    region_settings[i].video);
+      std::snprintf(region_setting.game, sizeof(region_setting.game), "%s",
+                    region_settings[i].game);
+      std::snprintf(region_setting.code, sizeof(region_setting.code), "%s",
+                    region_settings[i].code);
+      default_area = region_settings[i].area;
+      break;
+    }
+  }
 
-  std::string serno;
-  std::string model = "RVL-001(" + region_setting.area + ")";
+  char serno[SETTINGS_VALUE_SIZE] = "";
+  char model[SETTINGS_VALUE_SIZE];
+  std::snprintf(model, sizeof(model), "RVL-001(%s)", default_area);
   CreateSystemMenuTitleDirs();
   char settings_file_path[Common::NAND_PATH_SIZE];
   Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, WII_SETTING, settings_file_path,
@@ -369,14 +398,15 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
 
   const auto fs = system.GetIOS()->GetFS();
   {
-    Common::SettingsBuffer data;
+    settings_buffer_t data;
     const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path,
                                    IOS::HLE::FS::Mode::Read);
     if (file && file->Read(data, sizeof(data)))
     {
-      const Common::SettingsReader settings_reader(data);
-      serno = settings_reader.GetValue("SERNO");
-      model = settings_reader.GetValue("MODEL");
+      settings_reader_t settings_reader;
+      settings_reader_init(&settings_reader, data);
+      settings_reader_get(&settings_reader, "SERNO", serno, sizeof(serno));
+      settings_reader_get(&settings_reader, "MODEL", model, sizeof(model));
 
       bool region_matches = false;
       if (Config::Get(Config::MAIN_OVERRIDE_REGION_SETTINGS))
@@ -385,52 +415,63 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
       }
       else
       {
-        const std::string code = settings_reader.GetValue("CODE");
-        if (code.size() >= 2 && CodeRegion(code[1]) == SConfig::GetInstance().m_region)
+        char code[SETTINGS_VALUE_SIZE];
+        settings_reader_get(&settings_reader, "CODE", code, sizeof(code));
+        if (std::strlen(code) >= 2 && CodeRegion(code[1]) == SConfig::GetInstance().m_region)
           region_matches = true;
       }
 
       if (region_matches)
       {
-        region_setting =
-            RegionSetting{settings_reader.GetValue("AREA"), settings_reader.GetValue("VIDEO"),
-                          settings_reader.GetValue("GAME"), settings_reader.GetValue("CODE")};
+        settings_reader_get(&settings_reader, "AREA", region_setting.area,
+                            sizeof(region_setting.area));
+        settings_reader_get(&settings_reader, "VIDEO", region_setting.video,
+                            sizeof(region_setting.video));
+        settings_reader_get(&settings_reader, "GAME", region_setting.game,
+                            sizeof(region_setting.game));
+        settings_reader_get(&settings_reader, "CODE", region_setting.code,
+                            sizeof(region_setting.code));
       }
       else
       {
-        const size_t parenthesis_pos = model.find('(');
-        if (parenthesis_pos != std::string::npos)
-          model = model.substr(0, parenthesis_pos) + '(' + region_setting.area + ')';
+        // The model keeps its name and takes the region's area in its parentheses.
+        char* const parenthesis = std::strchr(model, '(');
+        if (parenthesis)
+        {
+          const size_t prefix_size = static_cast<size_t>(parenthesis - model);
+          std::snprintf(parenthesis, sizeof(model) - prefix_size, "(%s)", region_setting.area);
+        }
       }
     }
   }
   fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path);
 
-  if (serno.empty() || serno == "000000000")
+  if (!serno[0] || !std::strcmp(serno, "000000000"))
   {
-    serno = Common::SettingsWriter::GenerateSerialNumber();
-    INFO_LOG(BOOT, "No previous serial number found, generated one instead: %s", serno.c_str());
+    settings_generate_serial_number(serno, sizeof(serno));
+    INFO_LOG(BOOT, "No previous serial number found, generated one instead: %s", serno);
   }
   else
   {
-    INFO_LOG(BOOT, "Using serial number: %s", serno.c_str());
+    INFO_LOG(BOOT, "Using serial number: %s", serno);
   }
 
-  Common::SettingsWriter settings_writer;
-  settings_writer.AddSetting("AREA", region_setting.area);
-  settings_writer.AddSetting("MODEL", model);
-  settings_writer.AddSetting("DVD", "0");
-  settings_writer.AddSetting("MPCH", "0x7FFE");
-  settings_writer.AddSetting("CODE", region_setting.code);
-  settings_writer.AddSetting("SERNO", serno);
-  settings_writer.AddSetting("VIDEO", region_setting.video);
-  settings_writer.AddSetting("GAME", region_setting.game);
+  settings_writer_t settings_writer;
+  settings_writer_init(&settings_writer);
+  settings_writer_add(&settings_writer, "AREA", region_setting.area);
+  settings_writer_add(&settings_writer, "MODEL", model);
+  settings_writer_add(&settings_writer, "DVD", "0");
+  settings_writer_add(&settings_writer, "MPCH", "0x7FFE");
+  settings_writer_add(&settings_writer, "CODE", region_setting.code);
+  settings_writer_add(&settings_writer, "SERNO", serno);
+  settings_writer_add(&settings_writer, "VIDEO", region_setting.video);
+  settings_writer_add(&settings_writer, "GAME", region_setting.game);
 
   constexpr IOS::HLE::FS::Mode rw_mode = IOS::HLE::FS::Mode::ReadWrite;
   const auto settings_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
                                                    settings_file_path, {rw_mode, rw_mode, rw_mode});
   if (!settings_file ||
-      !settings_file->Write(settings_writer.GetBytes(), sizeof(Common::SettingsBuffer)))
+      !settings_file->Write(settings_writer.buffer, sizeof(settings_writer.buffer)))
   {
     PanicAlert("SetupWiiMemory: Can't create setting.txt file");
     return false;
@@ -439,7 +480,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   auto& memory = system.GetMemory();
 
   // Write the 256 byte setting.txt to memory.
-  memory.CopyToEmu(0x3800, settings_writer.GetBytes(), sizeof(Common::SettingsBuffer));
+  memory.CopyToEmu(0x3800, settings_writer.buffer, sizeof(settings_writer.buffer));
 
   INFO_LOG(BOOT, "Setup Wii Memory...");
 

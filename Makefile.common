@@ -425,7 +425,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/PcapFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/Random.cpp \
 	$(CORE_DIR)/Source/Core/Common/SDCardUtil.cpp \
-	$(CORE_DIR)/Source/Core/Common/SettingsHandler.cpp \
+	$(CORE_DIR)/Source/Core/Common/SettingsHandler.c \
 	$(CORE_DIR)/Source/Core/Common/SocketContext.cpp \
 	$(CORE_DIR)/Source/Core/Common/StringUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/SymbolDB.cpp \

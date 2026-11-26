@@ -123,21 +123,23 @@ IPCReply GetRealProductCode(Core::System& system, const IOCtlVRequest& request)
   if (!file)
     return IPCReply(IPC_ENOENT);
 
-  Common::SettingsBuffer data;
+  settings_buffer_t data;
 
   if (!file.ReadBytes(data, sizeof(data)))
     return IPCReply(IPC_ENOENT);
 
-  const Common::SettingsReader settings_reader(data);
-  const std::string code = settings_reader.GetValue("CODE");
+  settings_reader_t settings_reader;
+  char code[SETTINGS_VALUE_SIZE];
+  settings_reader_init(&settings_reader, data);
+  settings_reader_get(&settings_reader, "CODE", code, sizeof(code));
 
-  const size_t length = std::min<size_t>(request.io_vectors[0].size, code.length());
+  const size_t length = std::min<size_t>(request.io_vectors[0].size, std::strlen(code));
   if (length == 0)
     return IPCReply(IPC_ENOENT);
 
   auto& memory = system.GetMemory();
   memory.Memset(request.io_vectors[0].address, 0, request.io_vectors[0].size);
-  memory.CopyToEmu(request.io_vectors[0].address, code.c_str(), length);
+  memory.CopyToEmu(request.io_vectors[0].address, code, length);
   return IPCReply(IPC_SUCCESS);
 }
 

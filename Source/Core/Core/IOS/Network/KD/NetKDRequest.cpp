@@ -48,7 +48,7 @@ enum class HardwareModel : u8
   Unknown = 7
 };
 
-u8 GetAreaCode(std::string_view area)
+u8 GetAreaCode(const char* area)
 {
   static const struct
   {
@@ -61,14 +61,14 @@ u8 GetAreaCode(std::string_view area)
 
   for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); i++)
   {
-    if (area == regions[i].name)
+    if (!std::strcmp(area, regions[i].name))
       return regions[i].code;
   }
 
   return 7;  // Unknown
 }
 
-HardwareModel GetHardwareModel(std::string_view model)
+HardwareModel GetHardwareModel(const char* model)
 {
   static const struct
   {
@@ -83,7 +83,7 @@ HardwareModel GetHardwareModel(std::string_view model)
 
   for (size_t i = 0; i < sizeof(models) / sizeof(models[0]); i++)
   {
-    if (model == models[i].name)
+    if (!std::strcmp(model, models[i].name))
       return models[i].model;
   }
 
@@ -1060,7 +1060,7 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
     return IPCReply{IPC_SUCCESS};
   }
 
-  Common::SettingsBuffer data;
+  settings_buffer_t data;
   if (!file->Read(data, sizeof(data)))
   {
     WriteReturnValue(memory, NWC24::WC24_ERR_FILE_READ, request.buffer_out);
@@ -1068,14 +1068,16 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
     return IPCReply{IPC_SUCCESS};
   }
 
-  const Common::SettingsReader settings_reader{data};
-  const std::string serno = settings_reader.GetValue("SERNO");
+  settings_reader_t settings_reader;
+  char serno[SETTINGS_VALUE_SIZE];
+  settings_reader_init(&settings_reader, data);
+  settings_reader_get(&settings_reader, "SERNO", serno, sizeof(serno));
   char account_url[NWC24::NWC24Config::URL_SIZE];
   char form_data[256];
   m_config.GetAccountURL(account_url, sizeof(account_url));
   const int form_size =
       std::snprintf(form_data, sizeof(form_data), "mlid=w%016" PRIu64 "&hdid=%u&rgncd=%s",
-                    (u64)m_config.Id(), m_ios.GetIOSC().GetDeviceId(), serno.c_str());
+                    (u64)m_config.Id(), m_ios.GetIOSC().GetDeviceId(), serno);
   if (form_size < 0 || static_cast<size_t>(form_size) >= sizeof(form_data) ||
       !m_http.Post(account_url, form_data, static_cast<size_t>(form_size)))
   {
@@ -1217,21 +1219,23 @@ IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
       char settings_file_path[Common::NAND_PATH_SIZE];
       Common::GetTitleDataFilePath(Titles::SYSTEM_MENU, WII_SETTING, settings_file_path,
                                    sizeof(settings_file_path));
-      std::string area, model;
+      char area[SETTINGS_VALUE_SIZE] = "";
+      char model[SETTINGS_VALUE_SIZE] = "";
 
       const auto fs = m_ios.GetFS();
       if (const auto file = fs->OpenFile(PID_KD, PID_KD, settings_file_path, FS::Mode::Read))
       {
-        Common::SettingsBuffer data;
+        settings_buffer_t data;
         if (file->Read(data, sizeof(data)))
         {
-          const Common::SettingsReader settings_reader{data};
-          area = settings_reader.GetValue("AREA");
-          model = settings_reader.GetValue("MODEL");
+          settings_reader_t settings_reader;
+          settings_reader_init(&settings_reader, data);
+          settings_reader_get(&settings_reader, "AREA", area, sizeof(area));
+          settings_reader_get(&settings_reader, "MODEL", model, sizeof(model));
         }
       }
 
-      if (!area.empty() && !model.empty())
+      if (area[0] && model[0])
       {
         const u8 area_code = GetAreaCode(area);
         const u8 id_ctr = u8(m_config.IdGen());
