@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cstdlib>
+#include <cstring>
 #include <expected>
 #include <retro_miscellaneous.h>
 
@@ -32,6 +34,13 @@ bool IsValidFilename(std::string_view filename)
 {
   return filename.length() <= MaxFilenameLength &&
          !std::ranges::any_of(filename, [](char c) { return c == '/'; });
+}
+
+void FreeDirectoryList(DirectoryList* list)
+{
+  std::free(list->names);
+  list->names = nullptr;
+  list->count = 0;
 }
 
 void SplitPathAndBasename(const char* path, SplitPathResult* out)
@@ -184,23 +193,26 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
   else
   {
     // Calling Delete for the root would return Invalid. Let's delete all children instead.
-    auto children = ReadDirectory(0, 0, directory_path.c_str());
-    if (!children)
+    DirectoryList children;
+    const ResultCode list_result = ReadDirectory(0, 0, directory_path.c_str(), &children);
+    if (list_result != ResultCode::Success)
     {
       ERROR_LOG(IOS_FS, "DoStateRead failed to call ReadDirectory for %s: %u",
-                directory_path.c_str(), static_cast<unsigned>(children.error()));
+                directory_path.c_str(), static_cast<unsigned>(list_result));
       p.SetVerifyMode();
       return;
     }
 
-    for (const std::string& child_name : children.value())
+    for (u32 i = 0; i < children.count; i++)
     {
-      if (!delete_(directory_path + child_name))
+      if (!delete_(directory_path + children.names[i]))
       {
+        FreeDirectoryList(&children);
         p.SetVerifyMode();
         return;
       }
     }
+    FreeDirectoryList(&children);
   }
 
   Metadata metadata{};
@@ -339,16 +351,21 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
   p.Do(metadata->size);
   p.Do(metadata->fst_index);
 
-  auto children = ReadDirectory(0, 0, directory_path.c_str());
-  if (!children)
+  DirectoryList children;
+  const ResultCode list_result = ReadDirectory(0, 0, directory_path.c_str(), &children);
+  if (list_result != ResultCode::Success)
   {
     ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call ReadDirectory for %s: %u",
-              directory_path.c_str(), static_cast<unsigned>(children.error()));
+              directory_path.c_str(), static_cast<unsigned>(list_result));
     p.SetVerifyMode();
     return;
   }
 
-  p.DoEachElement(*children, [this, &directory_path](PointerWrap& p_, std::string& child_name) {
+  u32 child_count = children.count;
+  p.Do(child_count);
+  for (u32 child = 0; child < child_count; child++)
+  {
+    std::string child_name = children.names[child];
     std::string child_path;
     child_path.reserve(directory_path.size() + child_name.size() + 1);
     child_path.append(directory_path);
@@ -361,12 +378,12 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
     {
       ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u",
                 child_name.c_str(), static_cast<unsigned>(child_metadata.error()));
-      p_.SetVerifyMode();
-      return;
+      p.SetVerifyMode();
+      continue;
     }
 
-    p_.Do(*child_metadata);
-    p_.Do(child_name);
+    p.Do(*child_metadata);
+    p.Do(child_name);
 
     if (child_metadata->is_file)
     {
@@ -376,8 +393,8 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
       {
         ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call OpenFile for %s: %u",
                   child_name.c_str(), static_cast<unsigned>(handle.error()));
-        p_.SetVerifyMode();
-        return;
+        p.SetVerifyMode();
+        continue;
       }
 
       u32 i = 0;
@@ -390,8 +407,8 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
         {
           ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u",
                     child_name.c_str(), static_cast<unsigned>(read_result.error()));
-          p_.SetVerifyMode();
-          return;
+          p.SetVerifyMode();
+          break;
         }
         if (*read_result != bytes_to_read)
         {
@@ -399,18 +416,19 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
                     "DoStateWriteOrMeasure tried to read %s bytes from %u but got %" PRIu64
                     " bytes",
                     child_name.c_str(), bytes_to_read, (u64)(*read_result));
-          p_.SetVerifyMode();
-          return;
+          p.SetVerifyMode();
+          break;
         }
 
-        p_.DoArray(buffer, bytes_to_read);
+        p.DoArray(buffer, bytes_to_read);
         i += bytes_to_read;
       }
     }
     else
     {
-      DoStateWriteOrMeasure(p_, child_path);
+      DoStateWriteOrMeasure(p, child_path);
     }
-  });
+  }
+  FreeDirectoryList(&children);
 }
 }  // namespace IOS::HLE::FS

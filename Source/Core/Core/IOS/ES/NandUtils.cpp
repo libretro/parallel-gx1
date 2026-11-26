@@ -77,16 +77,15 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) con
   return ticket;
 }
 
-static bool IsValidPartOfTitleID(const std::string& string)
+static bool IsValidPartOfTitleID(const char* string)
 {
-  if (string.length() != 8)
-    return false;
-  for (const char c : string)
+  size_t i;
+  for (i = 0; i < 8; i++)
   {
-    if (!Common::IsXDigit(c))
+    if (!Common::IsXDigit(string[i]))
       return false;
   }
-  return true;
+  return string[8] == '\0';
 }
 
 static bool IsDirectory(FS::FileSystem* fs, const char* path)
@@ -98,8 +97,9 @@ static bool IsDirectory(FS::FileSystem* fs, const char* path)
 static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir,
                                         ESCore::TitleVisitor visit, void* context)
 {
-  const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, titles_dir.c_str());
-  if (!entries)
+  FS::DirectoryList entries;
+  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, titles_dir.c_str(), &entries) !=
+      FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "%s is not a directory", titles_dir.c_str());
     return;
@@ -107,32 +107,36 @@ static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& t
 
   // The /title and /import directories contain one directory per title type, and each of them has
   // a directory per title (where the name is the low 32 bits of the title ID in %08x format).
-  for (const std::string& title_type : *entries)
+  bool keep_going = true;
+  for (u32 i = 0; keep_going && i < entries.count; i++)
   {
+    const char* const title_type = entries.names[i];
     if (!IsValidPartOfTitleID(title_type))
       continue;
 
-    const std::string title_dir = StringFromFormat("%s/%s", titles_dir.c_str(), title_type.c_str());
-    const auto title_entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, title_dir.c_str());
-    if (!title_entries)
-      continue;
-
-    for (const std::string& title_identifier : *title_entries)
+    const std::string title_dir = StringFromFormat("%s/%s", titles_dir.c_str(), title_type);
+    FS::DirectoryList title_entries;
+    if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, title_dir.c_str(), &title_entries) !=
+        FS::ResultCode::Success)
     {
+      continue;
+    }
+
+    for (u32 j = 0; keep_going && j < title_entries.count; j++)
+    {
+      const char* const title_identifier = title_entries.names[j];
       if (!IsValidPartOfTitleID(title_identifier))
         continue;
-      if (!IsDirectory(
-              fs, StringFromFormat("%s/%s", title_dir.c_str(), title_identifier.c_str()).c_str()))
-      {
+      if (!IsDirectory(fs, StringFromFormat("%s/%s", title_dir.c_str(), title_identifier).c_str()))
         continue;
-      }
 
-      const u32 type = std::stoul(title_type, nullptr, 16);
-      const u32 identifier = std::stoul(title_identifier, nullptr, 16);
-      if (!visit(static_cast<u64>(type) << 32 | identifier, context))
-        return;
+      const u32 type = std::strtoul(title_type, nullptr, 16);
+      const u32 identifier = std::strtoul(title_identifier, nullptr, 16);
+      keep_going = visit(static_cast<u64>(type) << 32 | identifier, context);
     }
+    FS::FreeDirectoryList(&title_entries);
   }
+  FS::FreeDirectoryList(&entries);
 }
 
 static bool CountTitle(u64 title_id, void* context)
@@ -169,8 +173,8 @@ u32 ESCore::GetTitleWithTicketCount() const
 void ESCore::ForEachTitleWithTicket(TitleVisitor visit, void* context) const
 {
   const auto fs = m_ios.GetFS();
-  const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, "/ticket");
-  if (!entries)
+  FS::DirectoryList entries;
+  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, "/ticket", &entries) != FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "/ticket is not a directory");
     return;
@@ -178,34 +182,45 @@ void ESCore::ForEachTitleWithTicket(TitleVisitor visit, void* context) const
 
   // The /ticket directory contains one directory per title type, and each of them contains
   // one ticket per title (where the name is the low 32 bits of the title ID in %08x format).
-  for (const std::string& title_type : *entries)
+  bool keep_going = true;
+  for (u32 i = 0; keep_going && i < entries.count; i++)
   {
+    const char* const title_type = entries.names[i];
     if (!IsValidPartOfTitleID(title_type))
       continue;
 
-    const auto sub_entries =
-        fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ("/ticket/" + title_type).c_str());
-    if (!sub_entries)
-      continue;
-
-    for (const std::string& file_name : *sub_entries)
+    char sub_dir[sizeof("/ticket/") + FS::MaxFilenameLength];
+    std::snprintf(sub_dir, sizeof(sub_dir), "/ticket/%s", title_type);
+    FS::DirectoryList sub_entries;
+    if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, sub_dir, &sub_entries) != FS::ResultCode::Success)
     {
-      const std::string name_without_ext = file_name.substr(0, 8);
-      if (IsDirectory(
-              fs,
-              StringFromFormat("/ticket/%s/%s", title_type.c_str(), file_name.c_str()).c_str()) ||
-          !IsValidPartOfTitleID(name_without_ext) ||
-          (name_without_ext + ".tik" != file_name && name_without_ext + ".tv1" != file_name))
+      continue;
+    }
+
+    for (u32 j = 0; keep_going && j < sub_entries.count; j++)
+    {
+      // Tickets are named after the low 32 bits of the title ID with a .tik or .tv1 extension.
+      const char* const file_name = sub_entries.names[j];
+      char name_without_ext[9];
+      char path[FS::MaxPathLength + 1];
+      const size_t prefix_length = strnlen(file_name, 8);
+      std::memcpy(name_without_ext, file_name, prefix_length);
+      name_without_ext[prefix_length] = '\0';
+      std::snprintf(path, sizeof(path), "%s/%s", sub_dir, file_name);
+      if (IsDirectory(fs, path) || !IsValidPartOfTitleID(name_without_ext) ||
+          std::strlen(file_name) != 12 ||
+          (std::strcmp(file_name + 8, ".tik") && std::strcmp(file_name + 8, ".tv1")))
       {
         continue;
       }
 
-      const u32 type = std::stoul(title_type, nullptr, 16);
-      const u32 identifier = std::stoul(name_without_ext, nullptr, 16);
-      if (!visit(static_cast<u64>(type) << 32 | identifier, context))
-        return;
+      const u32 type = std::strtoul(title_type, nullptr, 16);
+      const u32 identifier = std::strtoul(name_without_ext, nullptr, 16);
+      keep_going = visit(static_cast<u64>(type) << 32 | identifier, context);
     }
+    FS::FreeDirectoryList(&sub_entries);
   }
+  FS::FreeDirectoryList(&entries);
 }
 
 u16 ESCore::GetStoredContentsCount(const ES::TMDReader& tmd,
@@ -265,16 +280,19 @@ bool ESCore::IsContentStored(const ES::TMDReader& tmd, const ES::Content& conten
 
 u32 ESCore::GetSharedContentsCount() const
 {
-  const auto entries = m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, "/shared1");
+  FS::FileSystem* const fs = m_ios.GetFS();
+  FS::DirectoryList entries;
   u32 count = 0;
-  for (const std::string& entry : *entries)
+  fs->ReadDirectory(PID_KERNEL, PID_KERNEL, "/shared1", &entries);
+  for (u32 i = 0; i < entries.count; i++)
   {
-    if (!IsDirectory(m_ios.GetFS(), ("/shared1/" + entry).c_str()) && entry.size() == 12 &&
-        entry.compare(8, 4, ".app") == 0)
-    {
+    const char* const entry = entries.names[i];
+    char path[FS::MaxPathLength + 1];
+    std::snprintf(path, sizeof(path), "/shared1/%s", entry);
+    if (!IsDirectory(fs, path) && std::strlen(entry) == 12 && !std::strcmp(entry + 8, ".app"))
       ++count;
-    }
   }
+  FS::FreeDirectoryList(&entries);
   return count;
 }
 
@@ -293,10 +311,13 @@ static bool DeleteDirectoriesIfEmpty(FS::FileSystem* fs, const std::string& path
   std::string::size_type position = std::string::npos;
   do
   {
-    const auto directory =
-        fs->ReadDirectory(PID_KERNEL, PID_KERNEL, path.substr(0, position).c_str());
-    if ((directory && directory->empty()) ||
-        (!directory && directory.error() != FS::ResultCode::NotFound))
+    FS::DirectoryList directory;
+    const FS::ResultCode result =
+        fs->ReadDirectory(PID_KERNEL, PID_KERNEL, path.substr(0, position).c_str(), &directory);
+    const bool is_empty = directory.count == 0;
+    FS::FreeDirectoryList(&directory);
+    if ((result == FS::ResultCode::Success && is_empty) ||
+        (result != FS::ResultCode::Success && result != FS::ResultCode::NotFound))
     {
       if (fs->Delete(PID_KERNEL, PID_KERNEL, path.substr(0, position).c_str()) !=
           FS::ResultCode::Success)
@@ -411,19 +432,23 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   const std::string import_content_dir = Common::GetImportTitlePath(title_id) + "/content";
 
   // Remove everything not listed in the TMD.
-  const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir.c_str());
-  if (!entries)
-    return false;
-  for (const std::string& name : *entries)
+  FS::DirectoryList entries;
+  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir.c_str(), &entries) !=
+      FS::ResultCode::Success)
   {
-    const std::string absolute_path =
-        StringFromFormat("%s/%s", import_content_dir.c_str(), name.c_str());
+    return false;
+  }
+  for (u32 i = 0; i < entries.count; i++)
+  {
+    const char* const name = entries.names[i];
+    const std::string absolute_path = StringFromFormat("%s/%s", import_content_dir.c_str(), name);
     // There should not be any directory in there. Remove it.
     if (IsDirectory(fs, absolute_path.c_str()))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
-    else if (!IsExpectedImportEntry(name.c_str(), tmd))
+    else if (!IsExpectedImportEntry(name, tmd))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path.c_str());
   }
+  FS::FreeDirectoryList(&entries);
 
   const std::string content_dir = Common::GetTitleContentPath(title_id);
   if (fs->Rename(PID_KERNEL, PID_KERNEL, import_content_dir.c_str(), content_dir.c_str()) !=

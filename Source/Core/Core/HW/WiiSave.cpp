@@ -212,19 +212,20 @@ private:
     if (!m_has_ids)
       return;
 
-    const auto entries = m_fs->ReadDirectory(m_uid, m_gid, dir.c_str());
-    if (!entries)
+    FS::DirectoryList entries;
+    if (m_fs->ReadDirectory(m_uid, m_gid, dir.c_str(), &entries) != FS::ResultCode::Success)
       return;
 
-    for (const std::string& elem : *entries)
+    for (u32 i = 0; i < entries.count; i++)
     {
-      if (elem == "banner.bin")
+      const char* const elem = entries.names[i];
+      if (!std::strcmp(elem, "banner.bin"))
         continue;
 
       const std::string path = dir + '/' + elem;
       const FS::Result<FS::Metadata> metadata = m_fs->GetMetadata(m_uid, m_gid, path.c_str());
       if (!metadata)
-        return;
+        break;
 
       SaveFile save_file;
       save_file.mode = GetBinMode(metadata->modes);
@@ -239,6 +240,7 @@ private:
       else
         ScanForFiles(path);
     }
+    FS::FreeDirectoryList(&entries);
   }
 
   void InitTitleUidAndGid()

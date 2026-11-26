@@ -726,10 +726,14 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   // Delete the ticket directory if it is now empty.
   const std::string ticket_parent_dir =
       StringFromFormat("/ticket/%08x", static_cast<u32>(title_id >> 32));
-  const auto ticket_parent_dir_entries =
-      fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ticket_parent_dir.c_str());
-  if (ticket_parent_dir_entries && ticket_parent_dir_entries->empty())
+  FS::DirectoryList ticket_parent_dir_entries;
+  if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ticket_parent_dir.c_str(),
+                        &ticket_parent_dir_entries) == FS::ResultCode::Success &&
+      ticket_parent_dir_entries.count == 0)
+  {
     fs->Delete(PID_KERNEL, PID_KERNEL, ticket_parent_dir.c_str());
+  }
+  FS::FreeDirectoryList(&ticket_parent_dir_entries);
 
   return IPC_SUCCESS;
 }
@@ -754,15 +758,19 @@ ReturnCode ESCore::DeleteTitleContent(u64 title_id) const
     return ES_EINVAL;
 
   const std::string content_dir = Common::GetTitleContentPath(title_id);
-  const auto files = m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir.c_str());
-  if (!files)
-    return FS::ConvertResult(files.error());
+  FS::DirectoryList files;
+  const FS::ResultCode result =
+      m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir.c_str(), &files);
+  if (result != FS::ResultCode::Success)
+    return FS::ConvertResult(result);
 
-  for (const std::string& file_name : *files)
+  for (u32 i = 0; i < files.count; i++)
   {
-    if (file_name.size() == 12 && file_name.compare(8, 4, ".app") == 0)
+    const char* const file_name = files.names[i];
+    if (std::strlen(file_name) == 12 && !std::strcmp(file_name + 8, ".app"))
       m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, (content_dir + '/' + file_name).c_str());
   }
+  FS::FreeDirectoryList(&files);
 
   return IPC_SUCCESS;
 }

@@ -162,6 +162,15 @@ bool IsValidPath(std::string_view path);
 bool IsValidNonRootPath(std::string_view path);
 bool IsValidFilename(std::string_view filename);
 
+/// The names in a directory, owned by the list; release it with FreeDirectoryList.
+struct DirectoryList
+{
+  char (*names)[MaxFilenameLength + 1];
+  u32 count;
+};
+
+void FreeDirectoryList(DirectoryList* list);
+
 struct SplitPathResult
 {
   char parent[MaxPathLength + 1];
@@ -252,7 +261,8 @@ public:
   ResultCode Rename(Uid caller_uid, Gid caller_gid, const char* old_path, const char* new_path);
 
   /// List the children of a directory (non-recursively).
-  Result<std::vector<std::string>> ReadDirectory(Uid caller_uid, Gid caller_gid, const char* path);
+  /// The list is left empty on failure.
+  ResultCode ReadDirectory(Uid caller_uid, Gid caller_gid, const char* path, DirectoryList* list);
 
   /// Get metadata about a file.
   Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const char* path);

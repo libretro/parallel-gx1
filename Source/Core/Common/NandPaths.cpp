@@ -245,27 +245,40 @@ bool EscapePathTo(const char* path, char* out, size_t out_size)
   return true;
 }
 
-std::string UnescapeFileName(const std::string& filename)
+static int HexDigitValue(char c)
 {
-  std::string result = filename;
-  size_t pos = 0;
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return -1;
+}
 
-  // Replace escape sequences of the format "__3f__" with the ASCII
-  // character defined by the escape sequence's two hex digits.
-  while ((pos = result.find("__", pos)) != std::string::npos)
+size_t UnescapeFileName(char* name, size_t length)
+{
+  size_t pos;
+
+  // Replace escape sequences of the format "__3f__" with the ASCII character defined by the
+  // escape sequence's hex digits. A single leading hex digit is enough, as it always was.
+  for (pos = 0; pos + 1 < length; pos++)
   {
-    u32 character;
-    if (pos + 6 <= result.size() && result[pos + 4] == '_' && result[pos + 5] == '_')
-      if (Common::FromChars(std::string_view{result}.substr(pos + 2, 2), character, 16).ec ==
-          std::errc{})
-      {
-        result.replace(pos, 6, {static_cast<char>(character)});
-      }
-
-    ++pos;
+    int high, low;
+    if (name[pos] != '_' || name[pos + 1] != '_')
+      continue;
+    if (pos + 6 > length || name[pos + 4] != '_' || name[pos + 5] != '_')
+      continue;
+    high = HexDigitValue(name[pos + 2]);
+    if (high < 0)
+      continue;
+    low = HexDigitValue(name[pos + 3]);
+    name[pos] = static_cast<char>(low < 0 ? high : high * 16 + low);
+    std::memmove(name + pos + 1, name + pos + 6, length - pos - 6);
+    length -= 5;
   }
-
-  return result;
+  name[length] = '\0';
+  return length;
 }
 
 }  // namespace Common

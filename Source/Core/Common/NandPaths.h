@@ -45,6 +45,7 @@ bool EscapePathTo(const char* path, char* out, size_t out_size);
 // Writes EscapeFileName of the size bytes at name to out, always terminated; returns false when
 // it had to be cut short to fit in out_size bytes.
 bool EscapeFileNameTo(const char* name, size_t size, char* out, size_t out_size);
-// Reverses escaping done by EscapeFileName
-std::string UnescapeFileName(const std::string& filename);
+// Reverses escaping done by EscapeFileName on the length bytes at name, in place; returns the
+// new length and terminates the result.
+size_t UnescapeFileName(char* name, size_t length);
 }  // namespace Common

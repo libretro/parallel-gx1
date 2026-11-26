@@ -732,27 +732,30 @@ IPCReply FSDevice::ReadDirectory(const Handle& handle, const IOCtlVRequest& requ
 
   char directory[65];
   memory.CopyStringFromEmu(directory, request.in_vectors[0].address, 64);
-  const Result<std::vector<std::string>> list =
-      m_ios.GetFS()->ReadDirectory(handle.uid, handle.gid, directory);
-  LogResult(CodeOf(list), "ReadDirectory(%s)", directory);
-  if (!list)
-    return GetFSReply(ConvertResult(list.error()));
+  DirectoryList list;
+  const ResultCode result = m_ios.GetFS()->ReadDirectory(handle.uid, handle.gid, directory, &list);
+  LogResult(result, "ReadDirectory(%s)", directory);
+  if (result != ResultCode::Success)
+    return GetFSReply(ConvertResult(result));
 
   if (!file_list_address)
   {
-    memory.Write_U32(static_cast<u32>(list->size()), file_count_address);
+    memory.Write_U32(list.count, file_count_address);
+    FreeDirectoryList(&list);
     return GetFSReply(IPC_SUCCESS);
   }
 
-  for (size_t i = 0; i < list->size() && i < max_count; ++i)
+  for (u32 i = 0; i < list.count && i < max_count; ++i)
   {
+    const u32 length = static_cast<u32>(std::strlen(list.names[i]));
     memory.Memset(file_list_address, 0, 13);
-    memory.CopyToEmu(file_list_address, (*list)[i].data(), (*list)[i].size());
+    memory.CopyToEmu(file_list_address, list.names[i], length);
     memory.Write_U8(0, file_list_address + 12);
-    file_list_address += static_cast<u32>((*list)[i].size()) + 1;
+    file_list_address += length + 1;
   }
   // Write the actual number of entries in the buffer.
-  memory.Write_U32(std::min(max_count, static_cast<u32>(list->size())), file_count_address);
+  memory.Write_U32(std::min(max_count, list.count), file_count_address);
+  FreeDirectoryList(&list);
   return GetFSReply(IPC_SUCCESS);
 }
 

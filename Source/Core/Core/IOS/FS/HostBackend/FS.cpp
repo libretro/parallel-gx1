@@ -3,6 +3,7 @@
 
 #include "Core/IOS/FS/FileSystem.h"
 
+#include <retro_dirent.h>
 #include <retro_miscellaneous.h>
 
 #include <cstdlib>
@@ -102,8 +103,7 @@ static u64 FixupDirectoryEntries(File::FSTEntry* dir, bool is_root)
 
     // Decode escaped invalid file system characters so that games (such as Harry Potter and the
     // Half-Blood Prince) can find what they expect.
-    if (it->virtualName.contains("__"))
-      it->virtualName = Common::UnescapeFileName(it->virtualName);
+    it->virtualName.resize(Common::UnescapeFileName(&it->virtualName[0], it->virtualName.size()));
 
     // Drop files that have too long filenames.
     if (!IsValidFilename(it->virtualName))
@@ -718,47 +718,108 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const char* old_path, const char
   return ResultCode::Success;
 }
 
-Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid, const char* path)
+// Adds a host directory entry under the name the emulated system sees, if it can see it.
+static bool AddDirectoryEntry(DirectoryList* list, u32* capacity, const char* host_name)
 {
+  // Each escape sequence takes six characters for one, so a longer name cannot unescape to a
+  // valid one.
+  char name[MaxFilenameLength * 6 + 1];
+  size_t length = std::strlen(host_name);
+  if (length >= sizeof(name))
+    return true;
+  std::memcpy(name, host_name, length + 1);
+
+  // Decode escaped invalid file system characters so that games (such as Harry Potter and the
+  // Half-Blood Prince) can find what they expect, and drop files that have too long filenames.
+  length = Common::UnescapeFileName(name, length);
+  if (length > MaxFilenameLength || std::memchr(name, '/', length))
+    return true;
+
+  if (list->count == *capacity)
+  {
+    const u32 new_capacity = *capacity ? *capacity * 2 : 16;
+    void* const grown = std::realloc(list->names, new_capacity * sizeof(*list->names));
+    if (!grown)
+      return false;
+    list->names = static_cast<char(*)[MaxFilenameLength + 1]>(grown);
+    *capacity = new_capacity;
+  }
+  std::memcpy(list->names[list->count], name, length + 1);
+  list->count++;
+  return true;
+}
+
+ResultCode FileSystem::ReadDirectory(Uid uid, Gid gid, const char* path, DirectoryList* list)
+{
+  list->names = nullptr;
+  list->count = 0;
+
   if (!IsValidPath(path))
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   const FstEntry* entry = GetFstEntryForPath(path);
   if (!entry)
-    return std::unexpected{ResultCode::NotFound};
+    return ResultCode::NotFound;
 
   if (!entry->CheckPermission(uid, gid, Mode::Read))
-    return std::unexpected{ResultCode::AccessDenied};
+    return ResultCode::AccessDenied;
 
   if (entry->data.is_file)
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   char host_path[HOST_PATH_SIZE];
   if (!BuildFilename(path, host_path, sizeof(host_path)))
-    return std::unexpected{ResultCode::Invalid};
-  File::FSTEntry host_entry = File::ScanDirectoryTree(host_path, false);
-  FixupDirectoryEntries(&host_entry, !std::strcmp(path, "/"));
+    return ResultCode::Invalid;
+
+  struct RDIR* const dir = retro_opendir_include_hidden(host_path, true);
+  if (dir)
+  {
+    const bool is_root = !std::strcmp(path, "/");
+    u32 capacity = 0;
+    bool ok = true;
+    while (ok && retro_readdir(dir))
+    {
+      const char* const name = retro_dirent_get_name(dir);
+      if (!name || !std::strcmp(name, ".") || !std::strcmp(name, ".."))
+        continue;
+      // Drop files in the root of the Wii NAND folder, since we store extra files there that the
+      // emulated system shouldn't know about.
+      if (is_root && !retro_dirent_is_dir(dir, nullptr))
+        continue;
+      ok = AddDirectoryEntry(list, &capacity, name);
+    }
+    retro_closedir(dir);
+    if (!ok)
+    {
+      FreeDirectoryList(list);
+      return ResultCode::UnknownError;
+    }
+  }
+
+  const u32 count = list->count;
+  if (!count)
+    return ResultCode::Success;
 
   // Sort files according to their order in the FST tree (issue 10234).
   // The result should look like this:
   //     [FilesNotInFst, ..., OldestFileInFst, ..., NewestFileInFst]
-  const size_t count = host_entry.children.size();
-  std::vector<std::string> output;
-  if (!count)
-    return output;
-
   // key: position in the FST; files that are not in the FST go first
-  int* const keys = static_cast<int*>(std::malloc(count * (sizeof(int) + sizeof(size_t))));
+  int* const keys = static_cast<int*>(
+      std::malloc(count * (sizeof(int) + sizeof(u32)) + count * sizeof(*list->names)));
   if (!keys)
-    return std::unexpected{ResultCode::UnknownError};
-  size_t* const order = reinterpret_cast<size_t*>(keys + count);
-  for (size_t i = 0; i < count; i++)
   {
-    const std::string& name = host_entry.children[i].virtualName;
+    FreeDirectoryList(list);
+    return ResultCode::UnknownError;
+  }
+  u32* const order = reinterpret_cast<u32*>(keys + count);
+  char(*const names)[MaxFilenameLength + 1] =
+      reinterpret_cast<char(*)[MaxFilenameLength + 1]>(order + count);
+  for (u32 i = 0; i < count; i++)
+  {
     keys[i] = -1;
     for (u32 j = 0; j < entry->child_count; j++)
     {
-      if (!std::strcmp(entry->children[j].name, name.c_str()))
+      if (!std::strcmp(entry->children[j].name, list->names[i]))
       {
         keys[i] = int(j);
         break;
@@ -769,18 +830,16 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid, con
   // Insertion sort in reverse order because Nintendo traverses a linked list in
   // which new elements are inserted at the front. Files that are not in the FST
   // sort lexicographically so results do not depend on the host filesystem.
-  for (size_t i = 0; i < count; i++)
+  for (u32 i = 0; i < count; i++)
   {
-    size_t j = i;
+    u32 j = i;
     while (j > 0)
     {
-      const size_t prev = order[j - 1];
+      const u32 prev = order[j - 1];
       const int key1 = keys[i];
       const int key2 = keys[prev];
-      const bool before = key1 != key2 ?
-                              key1 > key2 :
-                              host_entry.children[i].virtualName >
-                                  host_entry.children[prev].virtualName;
+      const bool before =
+          key1 != key2 ? key1 > key2 : std::strcmp(list->names[i], list->names[prev]) > 0;
       if (!before)
         break;
       order[j] = prev;
@@ -789,11 +848,11 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid, con
     order[j] = i;
   }
 
-  output.reserve(count);
-  for (size_t i = 0; i < count; i++)
-    output.push_back(std::move(host_entry.children[order[i]].virtualName));
+  std::memcpy(names, list->names, count * sizeof(*list->names));
+  for (u32 i = 0; i < count; i++)
+    std::memcpy(list->names[i], names[order[i]], sizeof(*list->names));
   std::free(keys);
-  return output;
+  return ResultCode::Success;
 }
 
 Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const char* path)
