@@ -577,23 +577,23 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   const std::string auth = StringFromFormat(
       "mlid=w%016" PRIu64 "\r\npasswd=%.*s", (u64)m_config.Id(),
       static_cast<int>(m_config.GetPassword().size()), m_config.GetPassword().data());
-  std::vector<u32> mails = m_send_list.GetMailToSend();
+  constexpr u32 MAX_MAILS = NWC24::Mail::WC24SendList::MAX_MAILS_PER_SEND;
+  u32 mails[MAX_MAILS];
+  const u32 mail_candidates = m_send_list.GetMailToSend(mails);
+  u32 mail_count = 0;
   // One part for the login, then one per mail; the mails' names and contents are kept until sent.
-  Common::HttpRequest::Multiform* const multiform = static_cast<Common::HttpRequest::Multiform*>(
-      std::calloc(mails.size() + 1, sizeof(Common::HttpRequest::Multiform) + sizeof(MailPart)));
-  if (!multiform)
-    return NWC24::WC24_ERR_SERVER;
-  MailPart* const parts = reinterpret_cast<MailPart*>(multiform + mails.size() + 1);
-  size_t multiform_count = 1;
+  Common::HttpRequest::Multiform multiform[1 + MAX_MAILS];
+  MailPart parts[MAX_MAILS];
   multiform[0] = {"mlid", auth.data(), auth.size()};
-  Common::ScopeGuard multiform_guard([&] {
-    for (size_t part = 1; part < multiform_count; part++)
+  Common::ScopeGuard parts_guard([&] {
+    for (u32 part = 0; part < mail_count; part++)
       std::free(parts[part].data);
-    std::free(multiform);
   });
 
-  for (const u32 file_index : mails)
+  // Mails that cannot be sent are deleted and left out, keeping the others in order.
+  for (u32 candidate = 0; candidate < mail_candidates; candidate++)
   {
+    const u32 file_index = mails[candidate];
     const u32 entry_id = m_send_list.GetEntryId(file_index);
     const u32 mail_size = m_send_list.GetMailSize(file_index);
     if (mail_size > MAX_MAIL_SIZE)
@@ -608,11 +608,10 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
       {
         LogError(ErrorType::SendMail, res);
       }
-      std::erase(mails, file_index);
       continue;
     }
 
-    MailPart& part = parts[multiform_count];
+    MailPart& part = parts[mail_count];
     part.data = static_cast<u8*>(std::malloc(mail_size ? mail_size : 1));
     NWC24::ErrorCode res = part.data ? NWC24::ReadFromVFF(NWC24::Mail::SEND_BOX_PATH,
                                                           m_send_list.GetMailPath(file_index),
@@ -630,17 +629,15 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
       {
         LogError(ErrorType::SendMail, res);
       }
-
-      std::erase(mails, file_index);
       continue;
     }
 
     std::snprintf(part.name, sizeof(part.name), "m%u", entry_id);
-    multiform[multiform_count] = {part.name, part.data, mail_size};
-    multiform_count++;
+    multiform[1 + mail_count] = {part.name, part.data, mail_size};
+    mails[mail_count++] = file_index;
   }
 
-  if (!m_http.PostMultiform(m_config.GetSendURL().c_str(), multiform, multiform_count))
+  if (!m_http.PostMultiform(m_config.GetSendURL().c_str(), multiform, 1 + mail_count))
   {
     ERROR_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_SEND_MAIL_NOW: Failed to request data at %s.",
               m_config.GetSendURL().c_str());
@@ -662,11 +659,12 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   // Reverse in order to delete from bottom to top of the send list.
   // We do this to ensure that new entries can be written as close to the beginning of the file as
   // possible.
-  for (auto it = mails.rbegin(); it != mails.rend(); ++it)
+  for (u32 mail = mail_count; mail-- > 0;)
   {
-    const u32 entry_id = m_send_list.GetEntryId(*it);
+    const u32 file_index = mails[mail];
+    const u32 entry_id = m_send_list.GetEntryId(file_index);
     Common::ScopeGuard delete_guard([&] {
-      NWC24::ErrorCode res = m_send_list.DeleteMessage(*it);
+      NWC24::ErrorCode res = m_send_list.DeleteMessage(file_index);
       if (res != NWC24::WC24_OK)
       {
         LogError(ErrorType::SendMail, res);

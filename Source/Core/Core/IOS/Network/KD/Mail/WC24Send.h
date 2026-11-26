@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -38,7 +37,9 @@ public:
 
   std::string_view GetMailFlag() const;
   u32 GetNumberOfMail() const;
-  std::vector<u32> GetMailToSend() const;
+  static constexpr u32 MAX_MAILS_PER_SEND = 16;
+  // Writes the entry indices of up to MAX_MAILS_PER_SEND mails to out; returns how many.
+  u32 GetMailToSend(u32* out) const;
   u32 GetEntryId(u32 entry_index) const;
   u32 GetMailSize(u32 index) const;
   ErrorCode DeleteMessage(u32 index);

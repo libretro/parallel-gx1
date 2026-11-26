@@ -9,7 +9,6 @@
 #include <ctime>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include <cstdio>
 
@@ -161,28 +160,21 @@ std::string WC24SendList::GetMailPath(u32 index) const
   return StringFromFormat("mb/s%07d.msg", GetEntryId(index));
 }
 
-std::vector<u32> WC24SendList::GetMailToSend() const
+u32 WC24SendList::GetMailToSend(u32* out) const
 {
   ASSERT(!IsDisabled());
   // The list is not guaranteed to have all entries consecutively.
   // As such we must find the populated entries for the specified number of mails.
-  const u32 mail_count = std::min(GetNumberOfMail(), 16U);
-  u32 found{};
+  const u32 mail_count = std::min(GetNumberOfMail(), MAX_MAILS_PER_SEND);
+  u32 found = 0;
 
-  std::vector<u32> mails{};
-  for (u32 index = 0; index < MAX_ENTRIES; index++)
+  for (u32 index = 0; index < MAX_ENTRIES && found < mail_count; index++)
   {
-    if (found == mail_count)
-      break;
-
     if (GetEntryId(index) != 0)
-    {
-      mails.emplace_back(index);
-      found++;
-    }
+      out[found++] = index;
   }
 
-  return mails;
+  return found;
 }
 
 bool WC24SendList::GetNextFreeEntryIndex(u32* free_index) const
