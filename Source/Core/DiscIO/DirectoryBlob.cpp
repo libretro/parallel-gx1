@@ -3,6 +3,7 @@
 
 #include "DiscIO/DirectoryBlob.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <set>
@@ -11,10 +12,12 @@
 #include <variant>
 #include <vector>
 
+#include <retro_dirent.h>
 #include <streams/file_stream.h>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
+#include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
 #include "Common/FileUtil.h"
@@ -32,7 +35,39 @@ namespace DiscIO
 {
 // Reads as many bytes as the vector fits (or less, if the file is smaller).
 // Returns the number of bytes read.
-static size_t ReadFileToBuffer(const std::string& path, u8* buffer, size_t size);
+static size_t ReadFileToBuffer(const char* path, u8* buffer, size_t size);
+
+// The longest name, its NUL included, that RootPath puts after a root
+static constexpr size_t ROOT_NAME_SIZE = 32;
+
+// A heap buffer holding root, with room for a name after it; nullptr when out of memory
+static char* RootPathBuffer(const char* root, size_t* root_length)
+{
+  *root_length = std::strlen(root);
+  char* const buffer = static_cast<char*>(std::malloc(*root_length + ROOT_NAME_SIZE));
+  if (buffer)
+    std::memcpy(buffer, root, *root_length);
+  return buffer;
+}
+
+// The root in buffer followed by name
+static const char* RootPath(char* buffer, size_t root_length, const char* name)
+{
+  const size_t size = std::strlen(name) + 1;
+  ASSERT(size <= ROOT_NAME_SIZE);
+  std::memcpy(buffer + root_length, name, size);
+  return buffer;
+}
+
+// A copy of path on the heap, freed with free(); nullptr when out of memory
+static char* CopyPath(const char* path)
+{
+  const size_t size = std::strlen(path) + 1;
+  char* const copy = static_cast<char*>(std::malloc(size));
+  if (copy)
+    std::memcpy(copy, path, size);
+  return copy;
+}
 
 static void PadToAddress(u64 start_address, u64* address, u64* length, u8** buffer);
 static void Write32(u32 data, u32 offset, u8* buffer);
@@ -259,14 +294,14 @@ void DiscContentContainer::AddBytes(u64 offset, const void* data, size_t size)
     Add(offset, size, ContentBytes(data, size));
 }
 
-u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, const std::string& path)
+u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, const char* path)
 {
   const u64 size = File::GetSize(path);
   Add(offset, size, ContentFile(path, 0));
   return size;
 }
 
-u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, u64 max_size, const std::string& path)
+u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, u64 max_size, const char* path)
 {
   const u64 file_size = File::GetSize(path);
   const u64 size = file_size < max_size ? file_size : max_size;
@@ -351,22 +386,23 @@ bool DiscContentContainer::Read(u64 offset, u64 length, u8* buffer, DirectoryBlo
   return true;
 }
 
-static bool ParsePartitionDirectoryName(const std::string& name, PartitionType* type)
+static bool ParsePartitionDirectoryName(const char* name, PartitionType* type)
 {
-  if (name.size() < 2)
+  const size_t length = std::strlen(name);
+  if (length < 2)
     return false;
 
-  if (!strcasecmp(name.c_str(), "DATA"))
+  if (!strcasecmp(name, "DATA"))
   {
     *type = PartitionType::Game;
     return true;
   }
-  if (!strcasecmp(name.c_str(), "UPDATE"))
+  if (!strcasecmp(name, "UPDATE"))
   {
     *type = PartitionType::Update;
     return true;
   }
-  if (!strcasecmp(name.c_str(), "CHANNEL"))
+  if (!strcasecmp(name, "CHANNEL"))
   {
     *type = PartitionType::Channel;
     return true;
@@ -375,21 +411,21 @@ static bool ParsePartitionDirectoryName(const std::string& name, PartitionType* 
   if (name[0] == 'P' || name[0] == 'p')
   {
     // e.g. "P-HA8E" (normally only used for Super Smash Bros. Brawl's VC partitions)
-    if (name[1] == '-' && name.size() == 6)
+    if (name[1] == '-' && length == 6)
     {
-      const u32 result = Common::swap32(reinterpret_cast<const u8*>(name.data() + 2));
+      const u32 result = Common::swap32(reinterpret_cast<const u8*>(name + 2));
       *type = static_cast<PartitionType>(result);
       return true;
     }
 
     // e.g. "P0"
     size_t digits = 1;
-    while (digits < name.size() && name[digits] >= '0' && name[digits] <= '9')
+    while (digits < length && name[digits] >= '0' && name[digits] <= '9')
       digits++;
-    if (digits == name.size())
+    if (digits == length)
     {
       u32 result;
-      if (TryParse(name.substr(1), &result))
+      if (TryParse(name + 1, &result))
       {
         *type = static_cast<PartitionType>(result);
         return true;
@@ -414,61 +450,67 @@ static bool PathCharactersEqual(char a, char b)
   return a == b || (IsDirectorySeparator(a) && IsDirectorySeparator(b));
 }
 
-static bool PathEndsWith(const std::string& path, const std::string_view suffix)
+static bool PathEndsWith(const char* path, size_t length, const char* suffix)
 {
-  if (suffix.size() > path.size())
+  const size_t suffix_length = std::strlen(suffix);
+  if (suffix_length > length)
     return false;
 
-  std::string::const_iterator path_iterator = path.cend() - suffix.size();
-  std::string_view::const_iterator suffix_iterator = suffix.cbegin();
-  while (path_iterator != path.cend())
+  path += length - suffix_length;
+  for (size_t i = 0; i < suffix_length; i++)
   {
-    if (!PathCharactersEqual(*path_iterator, *suffix_iterator))
+    if (!PathCharactersEqual(path[i], suffix[i]))
       return false;
-    path_iterator++;
-    suffix_iterator++;
   }
 
   return true;
 }
 
-static bool IsValidDirectoryBlob(const std::string& dol_path, std::string* partition_root,
-                                 std::string* true_root = nullptr)
+// The game partition's root, a heap copy of dol_path up to its "sys/main.dol", and the length of
+// the true root, the directory holding it; nullptr when dol_path is not a directory blob's
+static char* IsValidDirectoryBlob(const char* dol_path, size_t* true_root_length)
 {
-  if (!PathEndsWith(dol_path, "/sys/main.dol"))
-    return false;
-
-  static constexpr size_t chars_to_remove = std::string_view("sys/main.dol").size();
-  *partition_root = dol_path.substr(0, dol_path.size() - chars_to_remove);
-
-  if (File::GetSize(*partition_root + "sys/boot.bin") < 0x20)
-    return false;
-
-#ifdef _WIN32
-  constexpr const char* dir_separator = "/\\";
-#else
-  constexpr char dir_separator = '/';
-#endif
-  if (true_root)
-  {
-    *true_root =
-        dol_path.substr(0, dol_path.find_last_of(dir_separator, partition_root->size() - 2) + 1);
-  }
-
-  return true;
-}
-
-DirectoryBlobReader* DirectoryBlobReader::Create(const std::string& dol_path)
-{
-  std::string partition_root, true_root;
-  if (!IsValidDirectoryBlob(dol_path, &partition_root, &true_root))
+  static const char main_dol[] = "sys/main.dol";
+  const size_t dol_length = std::strlen(dol_path);
+  if (!PathEndsWith(dol_path, dol_length, "/sys/main.dol"))
     return nullptr;
 
-  return new DirectoryBlobReader(partition_root, true_root);
+  const size_t root_length = dol_length - (sizeof(main_dol) - 1);
+  char* const partition_root = static_cast<char*>(std::malloc(root_length + ROOT_NAME_SIZE));
+  if (!partition_root)
+    return nullptr;
+  std::memcpy(partition_root, dol_path, root_length);
+
+  if (File::GetSize(RootPath(partition_root, root_length, "sys/boot.bin")) < 0x20)
+  {
+    std::free(partition_root);
+    return nullptr;
+  }
+  partition_root[root_length] = '\0';
+
+  // the last separator before the partition root's own trailing one, searching the whole path
+  // when the root is that separator alone
+  size_t end = root_length >= 2 ? root_length - 1 : dol_length;
+  while (end > 0 && !IsDirectorySeparator(dol_path[end - 1]))
+    end--;
+  *true_root_length = end;
+
+  return partition_root;
 }
 
-DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
-                                         const std::string& true_root)
+DirectoryBlobReader* DirectoryBlobReader::Create(const char* dol_path)
+{
+  size_t true_root_length;
+  char* const partition_root = IsValidDirectoryBlob(dol_path, &true_root_length);
+  if (!partition_root)
+    return nullptr;
+
+  DirectoryBlobReader* const reader = new DirectoryBlobReader(partition_root, true_root_length);
+  std::free(partition_root);
+  return reader;
+}
+
+DirectoryBlobReader::DirectoryBlobReader(const char* game_partition_root, size_t true_root_length)
     : m_partitions(nullptr), m_partition_data_offsets(nullptr), m_partition_count(0),
       m_encryption_cache(this)
 {
@@ -492,26 +534,61 @@ DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
     std::vector<PartitionWithType> partitions;
     partitions.emplace_back(std::move(game_partition), PartitionType::Game);
 
-    std::string game_partition_directory_name = game_partition_root.substr(true_root.size());
-    game_partition_directory_name.pop_back();  // Remove trailing slash
+    // the game partition's directory name, without its trailing slash
+    const size_t root_length = std::strlen(game_partition_root);
+    const size_t name_length =
+        true_root_length < root_length ? root_length - true_root_length - 1 : 0;
+    char* const game_partition_directory_name = static_cast<char*>(std::malloc(name_length + 1));
     PartitionType root_type;
-    if (ParsePartitionDirectoryName(game_partition_directory_name, &root_type) &&
+    if (game_partition_directory_name)
+    {
+      std::memcpy(game_partition_directory_name, game_partition_root + true_root_length,
+                  name_length);
+      game_partition_directory_name[name_length] = '\0';
+    }
+    if (game_partition_directory_name &&
+        ParsePartitionDirectoryName(game_partition_directory_name, &root_type) &&
         root_type == PartitionType::Game)
     {
-      const File::FSTEntry true_root_entry = File::ScanDirectoryTree(true_root, false);
-      for (const File::FSTEntry& entry : true_root_entry.children)
+      // the true root's other partition directories: true root, '/', name, '/'
+      size_t base_length = true_root_length;
+      while (base_length > 1 && game_partition_root[base_length - 1] == DIR_SEP_CHR)
+        base_length--;
+      const bool add_separator = base_length && game_partition_root[base_length - 1] != DIR_SEP_CHR;
+      char* const path = static_cast<char*>(std::malloc(base_length + 1 + PATH_MAX_LENGTH));
+      struct RDIR* dir = nullptr;
+      if (path)
       {
-        if (entry.isDirectory)
-        {
-          PartitionType type;
-          if (ParsePartitionDirectoryName(entry.virtualName, &type) && type != PartitionType::Game)
-          {
-            partitions.emplace_back(DirectoryBlobPartition(entry.physicalName + "/", &m_is_wii),
-                                    type);
-          }
-        }
+        std::memcpy(path, game_partition_root, base_length);
+        path[base_length] = '\0';
+        dir = retro_opendir_include_hidden(path, true);
+        if (add_separator)
+          path[base_length++] = DIR_SEP_CHR;
       }
+      while (dir && retro_readdir(dir))
+      {
+        const char* const name = retro_dirent_get_name(dir);
+        size_t length;
+        PartitionType type;
+        if (!name || !std::strcmp(name, ".") || !std::strcmp(name, "..") ||
+            !retro_dirent_is_dir(dir, nullptr) || !ParsePartitionDirectoryName(name, &type) ||
+            type == PartitionType::Game)
+        {
+          continue;
+        }
+        length = std::strlen(name);
+        if (length + 2 > PATH_MAX_LENGTH)
+          continue;
+        std::memcpy(path + base_length, name, length);
+        path[base_length + length] = DIR_SEP_CHR;
+        path[base_length + length + 1] = '\0';
+        partitions.emplace_back(DirectoryBlobPartition(path, &m_is_wii), type);
+      }
+      if (dir)
+        retro_closedir(dir);
+      std::free(path);
     }
+    std::free(game_partition_directory_name);
 
     SetPartitions(std::move(partitions));
   }
@@ -689,11 +766,16 @@ u64 DirectoryBlobReader::GetDataSize() const
 }
 
 void DirectoryBlobReader::SetNonpartitionDiscHeaderFromFile(const u8* partition_header,
-                                                            const std::string& game_partition_root)
+                                                            const char* game_partition_root)
 {
   u8 header_bin[WII_NONPARTITION_DISCHEADER_SIZE];
-  const size_t header_bin_size = ReadFileToBuffer(game_partition_root + "disc/header.bin",
-                                                  header_bin, sizeof(header_bin));
+  size_t root_length;
+  char* const path = RootPathBuffer(game_partition_root, &root_length);
+  const size_t header_bin_size =
+      path ? ReadFileToBuffer(RootPath(path, root_length, "disc/header.bin"), header_bin,
+                              sizeof(header_bin)) :
+             0;
+  std::free(path);
   SetNonpartitionDiscHeader(partition_header, header_bin, header_bin_size);
 }
 
@@ -723,17 +805,22 @@ void DirectoryBlobReader::SetNonpartitionDiscHeader(const u8* partition_header,
                               WII_NONPARTITION_DISCHEADER_SIZE, ContentMemory(blob, 0));
 }
 
-void DirectoryBlobReader::SetWiiRegionDataFromFile(const std::string& game_partition_root)
+void DirectoryBlobReader::SetWiiRegionDataFromFile(const char* game_partition_root)
 {
   u8 wii_region_data[WII_REGION_DATA_SIZE];
-  const std::string region_bin_path = game_partition_root + "disc/region.bin";
+  size_t root_length;
+  char* const path = RootPathBuffer(game_partition_root, &root_length);
+  if (!path)
+    return;
+  const char* const region_bin_path = RootPath(path, root_length, "disc/region.bin");
   const size_t bytes_read =
       ReadFileToBuffer(region_bin_path, wii_region_data, sizeof(wii_region_data));
   SetWiiRegionData(wii_region_data, bytes_read, region_bin_path);
+  std::free(path);
 }
 
 void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t size,
-                                           const std::string& log_path)
+                                           const char* log_path)
 {
   ContentBlob* blob = ContentBlobAlloc(WII_REGION_DATA_SIZE);
   u8* region_data;
@@ -748,9 +835,9 @@ void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t siz
               size < WII_REGION_DATA_SIZE ? size_t(size) : size_t(WII_REGION_DATA_SIZE));
 
   if (size < 0x4)
-    ERROR_LOG(DISCIO, "Couldn't read region from %s", log_path.c_str());
+    ERROR_LOG(DISCIO, "Couldn't read region from %s", log_path);
   else if (size < 0x20)
-    ERROR_LOG(DISCIO, "Couldn't read age ratings from %s", log_path.c_str());
+    ERROR_LOG(DISCIO, "Couldn't read age ratings from %s", log_path);
 
   m_nonpartition_contents.Add(WII_REGION_DATA_ADDRESS, WII_REGION_DATA_SIZE,
                               ContentMemory(blob, 0));
@@ -760,7 +847,7 @@ static bool PartitionLess(const DirectoryBlobReader::PartitionWithType& lhs,
                           const DirectoryBlobReader::PartitionWithType& rhs)
 {
   if (lhs.type == rhs.type)
-    return lhs.partition.GetRootDirectory() < rhs.partition.GetRootDirectory();
+    return std::strcmp(lhs.partition.GetRootDirectory(), rhs.partition.GetRootDirectory()) < 0;
 
   // Ascending sort by partition type, except Update (1) comes before before Game (0)
   return (lhs.type > PartitionType::Update || rhs.type > PartitionType::Update) ?
@@ -856,23 +943,28 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   constexpr u32 TMD_OFFSET = 0x2c0;
   constexpr u32 H3_OFFSET = 0x4000;
 
-  const std::string& partition_root = partition->GetRootDirectory();
+  size_t root_length;
+  char* const path = RootPathBuffer(partition->GetRootDirectory(), &root_length);
+  if (!path)
+    return;
 
   const u64 ticket_size = m_nonpartition_contents.CheckSizeAndAdd(
       partition_address + WII_PARTITION_TICKET_ADDRESS, WII_PARTITION_TICKET_SIZE,
-      partition_root + "ticket.bin");
+      RootPath(path, root_length, "ticket.bin"));
 
-  const u64 tmd_size = m_nonpartition_contents.CheckSizeAndAdd(
-      partition_address + TMD_OFFSET, IOS::ES::MAX_TMD_SIZE, partition_root + "tmd.bin");
+  const u64 tmd_size =
+      m_nonpartition_contents.CheckSizeAndAdd(partition_address + TMD_OFFSET, IOS::ES::MAX_TMD_SIZE,
+                                              RootPath(path, root_length, "tmd.bin"));
 
   const u64 cert_offset = Common::AlignUp(TMD_OFFSET + tmd_size, 0x20ull);
   const u64 max_cert_size = H3_OFFSET - cert_offset;
 
   const u64 cert_size = m_nonpartition_contents.CheckSizeAndAdd(
-      partition_address + cert_offset, max_cert_size, partition_root + "cert.bin");
+      partition_address + cert_offset, max_cert_size, RootPath(path, root_length, "cert.bin"));
 
   m_nonpartition_contents.CheckSizeAndAdd(partition_address + H3_OFFSET, WII_PARTITION_H3_SIZE,
-                                          partition_root + "h3.bin");
+                                          RootPath(path, root_length, "h3.bin"));
+  std::free(path);
 
   constexpr u32 PARTITION_HEADER_SIZE = 0x1c;
   const u64 data_size = Common::AlignUp(partition->GetDataSize(), 0x7c00) / 0x7c00 * 0x8000;
@@ -904,27 +996,92 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   }
 }
 
-DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory, const bool* is_wii)
-    : m_root_directory(std::move(root_directory))
+DirectoryBlobPartition::DirectoryBlobPartition(const char* root_directory, const bool* is_wii)
+    : m_root_directory(CopyPath(root_directory))
 {
   // the header is put together in place and added once the DOL and FST
   // addresses are in it
-  ContentBlob* const header_blob = ZeroedBlob(DISCHEADER_SIZE);
+  size_t root_length;
+  char* const path = RootPathBuffer(root_directory, &root_length);
+  ContentBlob* const header_blob = path ? ZeroedBlob(DISCHEADER_SIZE) : nullptr;
   if (!header_blob)
+  {
+    std::free(path);
     return;
+  }
   u8* const disc_header = ContentBlobData(header_blob);
-  if (ReadFileToBuffer(m_root_directory + "sys/boot.bin", disc_header, DISCHEADER_SIZE) < 0x20)
-    ERROR_LOG(DISCIO, "%s doesn't exist or is too small",
-              (m_root_directory + "sys/boot.bin").c_str());
+  if (ReadFileToBuffer(RootPath(path, root_length, "sys/boot.bin"), disc_header, DISCHEADER_SIZE) <
+      0x20)
+  {
+    ERROR_LOG(DISCIO, "%s doesn't exist or is too small", path);
+  }
 
   SetDiscType(is_wii, disc_header);
-  SetBI2FromFile(m_root_directory + "sys/bi2.bin");
-  const u64 dol_address = SetApploaderFromFile(m_root_directory + "sys/apploader.img");
+  SetBI2FromFile(RootPath(path, root_length, "sys/bi2.bin"));
+  const u64 dol_address = SetApploaderFromFile(RootPath(path, root_length, "sys/apploader.img"));
   const u64 fst_address =
-      SetDOLFromFile(m_root_directory + "sys/main.dol", dol_address, disc_header);
-  BuildFSTFromFolder(m_root_directory + "files/", fst_address, disc_header);
+      SetDOLFromFile(RootPath(path, root_length, "sys/main.dol"), dol_address, disc_header);
+  BuildFSTFromFolder(RootPath(path, root_length, "files/"), fst_address, disc_header);
+  std::free(path);
 
   m_contents.Add(DISCHEADER_ADDRESS, DISCHEADER_SIZE, ContentMemory(header_blob, 0));
+}
+
+DirectoryBlobPartition::DirectoryBlobPartition(const DirectoryBlobPartition& other)
+    : m_contents(other.m_contents),
+      m_root_directory(other.m_root_directory ? CopyPath(other.m_root_directory) : nullptr),
+      m_is_wii(other.m_is_wii), m_is_triforce(other.m_is_triforce),
+      m_address_shift(other.m_address_shift), m_data_size(other.m_data_size)
+{
+  std::memcpy(m_key, other.m_key, sizeof(m_key));
+}
+
+DirectoryBlobPartition& DirectoryBlobPartition::operator=(const DirectoryBlobPartition& other)
+{
+  if (this != &other)
+  {
+    char* const root = other.m_root_directory ? CopyPath(other.m_root_directory) : nullptr;
+    std::free(m_root_directory);
+    m_root_directory = root;
+    m_contents = other.m_contents;
+    std::memcpy(m_key, other.m_key, sizeof(m_key));
+    m_is_wii = other.m_is_wii;
+    m_is_triforce = other.m_is_triforce;
+    m_address_shift = other.m_address_shift;
+    m_data_size = other.m_data_size;
+  }
+  return *this;
+}
+
+DirectoryBlobPartition::DirectoryBlobPartition(DirectoryBlobPartition&& other) noexcept
+    : m_contents(std::move(other.m_contents)), m_root_directory(other.m_root_directory),
+      m_is_wii(other.m_is_wii), m_is_triforce(other.m_is_triforce),
+      m_address_shift(other.m_address_shift), m_data_size(other.m_data_size)
+{
+  std::memcpy(m_key, other.m_key, sizeof(m_key));
+  other.m_root_directory = nullptr;
+}
+
+DirectoryBlobPartition& DirectoryBlobPartition::operator=(DirectoryBlobPartition&& other) noexcept
+{
+  if (this != &other)
+  {
+    std::free(m_root_directory);
+    m_root_directory = other.m_root_directory;
+    other.m_root_directory = nullptr;
+    m_contents = std::move(other.m_contents);
+    std::memcpy(m_key, other.m_key, sizeof(m_key));
+    m_is_wii = other.m_is_wii;
+    m_is_triforce = other.m_is_triforce;
+    m_address_shift = other.m_address_shift;
+    m_data_size = other.m_data_size;
+  }
+  return *this;
+}
+
+DirectoryBlobPartition::~DirectoryBlobPartition()
+{
+  std::free(m_root_directory);
 }
 
 void DirectoryBlobPartition::SetDiscType(const bool* is_wii, const u8* disc_header)
@@ -947,7 +1104,7 @@ void DirectoryBlobPartition::SetDiscType(const bool* is_wii, const u8* disc_head
   m_address_shift = m_is_wii ? 2 : 0;
 }
 
-void DirectoryBlobPartition::SetBI2FromFile(const std::string& bi2_path)
+void DirectoryBlobPartition::SetBI2FromFile(const char* bi2_path)
 {
   ContentBlob* const blob = ZeroedBlob(BI2_SIZE);
   size_t bytes_read;
@@ -959,12 +1116,12 @@ void DirectoryBlobPartition::SetBI2FromFile(const std::string& bi2_path)
 
   bytes_read = ReadFileToBuffer(bi2_path, ContentBlobData(blob), BI2_SIZE);
   if (!m_is_wii && bytes_read < 0x1C)
-    ERROR_LOG(DISCIO, "Couldn't read region from %s", bi2_path.c_str());
+    ERROR_LOG(DISCIO, "Couldn't read region from %s", bi2_path);
 
   m_contents.Add(BI2_ADDRESS, BI2_SIZE, ContentMemory(blob, 0));
 }
 
-u64 DirectoryBlobPartition::SetApploaderFromFile(const std::string& path)
+u64 DirectoryBlobPartition::SetApploaderFromFile(const char* path)
 {
   File::DirectIOFile file(path, File::AccessMode::Read);
   const size_t size = size_t(file.GetSize());
@@ -974,21 +1131,21 @@ u64 DirectoryBlobPartition::SetApploaderFromFile(const std::string& path)
   return SetApploader(blob, path);
 }
 
-u64 DirectoryBlobPartition::SetApploader(ContentBlob* apploader, const std::string& log_path)
+u64 DirectoryBlobPartition::SetApploader(ContentBlob* apploader, const char* log_path)
 {
   bool success = false;
   const u64 size = apploader ? apploader->size : 0;
 
   if (size < 0x20)
   {
-    ERROR_LOG(DISCIO, "%s couldn't be accessed or is too small", log_path.c_str());
+    ERROR_LOG(DISCIO, "%s couldn't be accessed or is too small", log_path);
   }
   else
   {
     const u8* const data = ContentBlobData(apploader);
     const u64 apploader_size = 0x20 + Common::swap32(data + 0x14) + Common::swap32(data + 0x18);
     if (apploader_size != size)
-      ERROR_LOG(DISCIO, "%s is the wrong size... Is it really an apploader?", log_path.c_str());
+      ERROR_LOG(DISCIO, "%s is the wrong size... Is it really an apploader?", log_path);
     else
       success = true;
   }
@@ -1017,8 +1174,7 @@ u64 DirectoryBlobPartition::SetApploader(ContentBlob* apploader, const std::stri
   return Common::AlignUp(APPLOADER_ADDRESS + apploader_size + 0x20, 0x20ull);
 }
 
-u64 DirectoryBlobPartition::SetDOLFromFile(const std::string& path, u64 dol_address,
-                                           u8* disc_header)
+u64 DirectoryBlobPartition::SetDOLFromFile(const char* path, u64 dol_address, u8* disc_header)
 {
   const u64 dol_size = m_contents.CheckSizeAndAdd(dol_address, path);
 
@@ -1041,8 +1197,8 @@ static std::vector<FSTBuilderNode> ConvertFSTEntriesToBuilderNodes(const File::F
     }
     else
     {
-      content =
-          std::vector<BuilderContentSource>{{0, entry.size, ContentFile(entry.physicalName, 0)}};
+      content = std::vector<BuilderContentSource>{
+          {0, entry.size, ContentFile(entry.physicalName.c_str(), 0)}};
     }
 
     nodes.emplace_back(FSTBuilderNode{entry.virtualName, entry.size, std::move(content)});
@@ -1050,7 +1206,7 @@ static std::vector<FSTBuilderNode> ConvertFSTEntriesToBuilderNodes(const File::F
   return nodes;
 }
 
-void DirectoryBlobPartition::BuildFSTFromFolder(const std::string& fst_root_path, u64 fst_address,
+void DirectoryBlobPartition::BuildFSTFromFolder(const char* fst_root_path, u64 fst_address,
                                                 u8* disc_header)
 {
   auto nodes = ConvertFSTEntriesToBuilderNodes(File::ScanDirectoryTree(fst_root_path, true));
@@ -1276,7 +1432,7 @@ void DirectoryBlobPartition::WriteDirectory(u8* fst_data,
 }
 
 // Up to size octets of the file at path into buffer; returns how many.
-static size_t ReadFileToBuffer(const std::string& path, u8* buffer, size_t size)
+static size_t ReadFileToBuffer(const char* path, u8* buffer, size_t size)
 {
   File::DirectIOFile file(path, File::AccessMode::Read);
   const u64 file_size = file.GetSize();

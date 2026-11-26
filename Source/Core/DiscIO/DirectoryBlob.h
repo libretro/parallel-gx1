@@ -132,10 +132,6 @@ struct ContentSource
 };
 
 ContentSource ContentFile(const char* path, u64 offset);
-inline ContentSource ContentFile(const std::string& path, u64 offset)
-{
-  return ContentFile(path.c_str(), offset);
-}
 // Takes over the caller's reference.
 ContentSource ContentMemory(ContentBlob* blob, u64 offset);
 ContentSource ContentBytes(const void* data, size_t size);
@@ -208,8 +204,8 @@ public:
 
   void Add(u64 offset, u64 size, const ContentSource& source);
   void AddBytes(u64 offset, const void* data, size_t size);
-  u64 CheckSizeAndAdd(u64 offset, const std::string& path);
-  u64 CheckSizeAndAdd(u64 offset, u64 max_size, const std::string& path);
+  u64 CheckSizeAndAdd(u64 offset, const char* path);
+  u64 CheckSizeAndAdd(u64 offset, u64 max_size, const char* path);
 
   bool Read(u64 offset, u64 length, u8* buffer, DirectoryBlobReader* blob) const;
 
@@ -227,18 +223,19 @@ class DirectoryBlobPartition
 {
 public:
   DirectoryBlobPartition() = default;
-  // is_wii is detected from the disc header when null
-  DirectoryBlobPartition(std::string root_directory, const bool* is_wii);
+  // is_wii is detected from the disc header when null; the root directory ends with a separator
+  DirectoryBlobPartition(const char* root_directory, const bool* is_wii);
 
-  DirectoryBlobPartition(const DirectoryBlobPartition&) = default;
-  DirectoryBlobPartition& operator=(const DirectoryBlobPartition&) = default;
-  DirectoryBlobPartition(DirectoryBlobPartition&&) = default;
-  DirectoryBlobPartition& operator=(DirectoryBlobPartition&&) = default;
+  DirectoryBlobPartition(const DirectoryBlobPartition& other);
+  DirectoryBlobPartition& operator=(const DirectoryBlobPartition& other);
+  DirectoryBlobPartition(DirectoryBlobPartition&& other) noexcept;
+  DirectoryBlobPartition& operator=(DirectoryBlobPartition&& other) noexcept;
+  ~DirectoryBlobPartition();
 
   bool IsWii() const { return m_is_wii; }
   u64 GetDataSize() const { return m_data_size; }
   void SetDataSize(u64 size) { m_data_size = size; }
-  const std::string& GetRootDirectory() const { return m_root_directory; }
+  const char* GetRootDirectory() const { return m_root_directory ? m_root_directory : ""; }
   const DiscContentContainer& GetContents() const { return m_contents; }
 
   const u8* GetKey() const { return m_key; }
@@ -246,17 +243,16 @@ public:
 
 private:
   void SetDiscType(const bool* is_wii, const u8* disc_header);
-  void SetBI2FromFile(const std::string& bi2_path);
+  void SetBI2FromFile(const char* bi2_path);
 
   // Returns DOL address
-  u64 SetApploaderFromFile(const std::string& path);
+  u64 SetApploaderFromFile(const char* path);
   // takes over the reference
-  u64 SetApploader(ContentBlob* apploader, const std::string& log_path);
+  u64 SetApploader(ContentBlob* apploader, const char* log_path);
   // Returns FST address
-  u64 SetDOLFromFile(const std::string& path, u64 dol_address, u8* disc_header);
+  u64 SetDOLFromFile(const char* path, u64 dol_address, u8* disc_header);
 
-  void BuildFSTFromFolder(const std::string& fst_root_path, u64 fst_address,
-                          u8* disc_header);
+  void BuildFSTFromFolder(const char* fst_root_path, u64 fst_address, u8* disc_header);
   void BuildFST(std::vector<FSTBuilderNode> root_nodes, u64 fst_address,
                 u8* disc_header);
 
@@ -273,7 +269,7 @@ private:
 
   u8 m_key[VolumeWii::AES_KEY_SIZE]{};
 
-  std::string m_root_directory;
+  char* m_root_directory = nullptr;  // owned
   bool m_is_wii = false;
   bool m_is_triforce = false;
   // GameCube has no shift, Wii has 2 bit shift
@@ -287,7 +283,7 @@ class DirectoryBlobReader final : public BlobReaderOfKind<BlobReaderKind::Direct
   friend DiscContentContainer;
 
 public:
-  static DirectoryBlobReader* Create(const std::string& dol_path);
+  static DirectoryBlobReader* Create(const char* dol_path);
 
   DirectoryBlobReader(DirectoryBlobReader&&) = delete;
   DirectoryBlobReader& operator=(DirectoryBlobReader&&) = delete;
@@ -320,9 +316,8 @@ public:
   };
 
 private:
-
-  explicit DirectoryBlobReader(const std::string& game_partition_root,
-                               const std::string& true_root);
+  // the true root is the first true_root_length chars of the game partition's root
+  DirectoryBlobReader(const char* game_partition_root, size_t true_root_length);
   explicit DirectoryBlobReader(const DirectoryBlobReader& rhs);
 
   const DirectoryBlobPartition* GetPartition(u64 offset, u64 size, u64 partition_data_offset) const;
@@ -332,11 +327,11 @@ private:
                             u64 partition_data_decrypted_size);
 
   void SetNonpartitionDiscHeaderFromFile(const u8* partition_header,
-                                         const std::string& game_partition_root);
+                                         const char* game_partition_root);
   void SetNonpartitionDiscHeader(const u8* partition_header, const u8* header_bin,
                                  size_t header_bin_size);
-  void SetWiiRegionDataFromFile(const std::string& game_partition_root);
-  void SetWiiRegionData(const u8* wii_region_data, size_t size, const std::string& log_path);
+  void SetWiiRegionDataFromFile(const char* game_partition_root);
+  void SetWiiRegionData(const u8* wii_region_data, size_t size, const char* log_path);
   void SetPartitions(std::vector<PartitionWithType>&& partitions);
   void SetPartitionHeader(DirectoryBlobPartition* partition, u64 partition_address);
 
