@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <string_view>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -16,7 +15,7 @@ namespace DiscIO
 class SplitPlainFileReader final : public BlobReaderOfKind<BlobReaderKind::SplitPlain>
 {
 public:
-  static SplitPlainFileReader* Create(std::string_view first_file_path);
+  static SplitPlainFileReader* Create(const char* first_file_path);
 
   BlobType GetBlobType() const { return BlobType::SPLIT_PLAIN; }
   BlobReader* CopyReader() const;

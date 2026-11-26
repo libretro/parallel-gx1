@@ -24,7 +24,7 @@ class WIARVZFileReader final : public BlobReaderOfKind<BlobReaderKind::WIARVZ>
 public:
   ~WIARVZFileReader();
 
-  static WIARVZFileReader* Create(File::DirectIOFile file, const std::string& path);
+  static WIARVZFileReader* Create(File::DirectIOFile file, const char* path);
 
   BlobType GetBlobType() const { return m_rvz ? BlobType::RVZ : BlobType::WIA; }
   BlobReader* CopyReader() const;
@@ -42,13 +42,13 @@ public:
   bool ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset);
 
 private:
-  WIARVZFileReader(File::DirectIOFile file, const std::string& path, bool rvz);
+  WIARVZFileReader(File::DirectIOFile file, const char* path, bool rvz);
   bool Fetch(const rvz_request* req);
   bool Open();
   bool RunRead(int armed, u64 size);
 
   File::DirectIOFile m_file;
-  std::string m_path;
+  char* m_path = nullptr;  // owned
   struct rvz* m_reader = nullptr;
   bool m_rvz;
   int m_compression = 0;

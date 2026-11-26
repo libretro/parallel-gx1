@@ -5,33 +5,43 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
-#include <string>
-#include <string_view>
 
 namespace DiscIO
 {
-SplitPlainFileReader* SplitPlainFileReader::Create(std::string_view first_file_path)
+SplitPlainFileReader* SplitPlainFileReader::Create(const char* first_file_path)
 {
-  constexpr std::string_view part0_iso = ".part0.iso";
-  if (!first_file_path.ends_with(part0_iso))
+  static const char part0_iso[] = ".part0.iso";
+  const size_t length = std::strlen(first_file_path);
+  if (length < sizeof(part0_iso) - 1 ||
+      std::memcmp(first_file_path + length - (sizeof(part0_iso) - 1), part0_iso,
+                  sizeof(part0_iso) - 1))
+  {
     return nullptr;
+  }
 
-  const std::string_view base_path =
-      first_file_path.substr(0, first_file_path.size() - part0_iso.size());
+  // the path without ".part0.iso", then each part's ending
+  static const size_t PART_NAME_SIZE = 40;
+  const size_t base_length = length - (sizeof(part0_iso) - 1);
+  char* const part_path = static_cast<char*>(std::malloc(base_length + PART_NAME_SIZE));
+  if (!part_path)
+    return nullptr;
+  std::memcpy(part_path, first_file_path, base_length);
+
   SplitPlainFileReader* const reader = new SplitPlainFileReader;
   size_t index = 0;
   u64 offset = 0;
   while (index < MAX_FILES)
   {
-    char part_name[40];
-    snprintf(part_name, sizeof(part_name), ".part%zu.iso", index);
-    File::DirectIOFile f(std::string(base_path) + part_name, File::AccessMode::Read);
+    snprintf(part_path + base_length, PART_NAME_SIZE, ".part%zu.iso", index);
+    File::DirectIOFile f(part_path, File::AccessMode::Read);
     if (!f.IsOpen())
       break;
     const u64 size = f.GetSize();
     if (size == 0)
     {
+      std::free(part_path);
       DestroyBlobReader(reader);
       return nullptr;
     }
@@ -42,6 +52,7 @@ SplitPlainFileReader* SplitPlainFileReader::Create(std::string_view first_file_p
     offset += size;
     ++index;
   }
+  std::free(part_path);
 
   if (reader->m_file_count < 2)
   {

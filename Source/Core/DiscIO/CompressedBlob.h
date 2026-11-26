@@ -42,7 +42,7 @@ struct CompressedBlobHeader  // 32 bytes
 class CompressedBlobReader final : public SectorReader
 {
 public:
-  static CompressedBlobReader* Create(File::DirectIOFile file, const std::string& filename);
+  static CompressedBlobReader* Create(File::DirectIOFile file, const char* filename);
   ~CompressedBlobReader();
   CompressedBlobReader(const CompressedBlobReader&) = delete;
   CompressedBlobReader& operator=(const CompressedBlobReader&) = delete;
@@ -64,7 +64,7 @@ public:
   bool GetBlock(u64 block_num, u8* out_ptr);
 
 private:
-  CompressedBlobReader(File::DirectIOFile file, std::string filename);
+  CompressedBlobReader(File::DirectIOFile file, const char* filename);
   bool Initialize();
   bool ValidateBlockPointers() const;
 
@@ -77,7 +77,7 @@ private:
   u8* m_zlib_buffer = nullptr;
   u32 m_zlib_buffer_size = 0;
   void* m_inflate = nullptr;  // libretro-common's rinflate, made once
-  std::string m_file_name = {};
+  char* m_file_name = nullptr;  // owned
   bool m_valid = false;
 };
 

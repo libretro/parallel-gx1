@@ -3,20 +3,34 @@
 
 #include "DiscIO/WIABlob.h"
 
+#include <cstdlib>
+#include <cstring>
+
 #include <formats/rvz.h>
 
 #include "Common/Logging/Log.h"
 
 namespace DiscIO
 {
-WIARVZFileReader::WIARVZFileReader(File::DirectIOFile file, const std::string& path, bool rvz)
-    : m_file(std::move(file)), m_path(path), m_rvz(rvz)
+// A copy of path on the heap, freed with free(); nullptr when out of memory
+static char* CopyPath(const char* path)
+{
+  const size_t size = std::strlen(path) + 1;
+  char* const copy = static_cast<char*>(std::malloc(size));
+  if (copy)
+    std::memcpy(copy, path, size);
+  return copy;
+}
+
+WIARVZFileReader::WIARVZFileReader(File::DirectIOFile file, const char* path, bool rvz)
+    : m_file(std::move(file)), m_path(CopyPath(path)), m_rvz(rvz)
 {
 }
 
 WIARVZFileReader::~WIARVZFileReader()
 {
   rvz_free(m_reader);
+  std::free(m_path);
 }
 
 // The range of the file the reader asks for, read straight into the memory
@@ -55,7 +69,7 @@ bool WIARVZFileReader::RunRead(int armed, u64 size)
   return e == RVZ_OK && rvz_read_progress(m_reader) == size;
 }
 
-WIARVZFileReader* WIARVZFileReader::Create(File::DirectIOFile file, const std::string& path)
+WIARVZFileReader* WIARVZFileReader::Create(File::DirectIOFile file, const char* path)
 {
   u32 magic;
   bool rvz;
@@ -67,9 +81,9 @@ WIARVZFileReader* WIARVZFileReader::Create(File::DirectIOFile file, const std::s
   rvz = magic == RVZ_MAGIC;
 
   WIARVZFileReader* blob = new WIARVZFileReader(std::move(file), path, rvz);
-  if (!(blob->m_reader = rvz_new()) || !blob->Open())
+  if (!blob->m_path || !(blob->m_reader = rvz_new()) || !blob->Open())
   {
-    ERROR_LOG(DISCIO, "Not a WIA or RVZ image this reads: %s", path.c_str());
+    ERROR_LOG(DISCIO, "Not a WIA or RVZ image this reads: %s", path);
     DestroyBlobReader(blob);
     return nullptr;
   }

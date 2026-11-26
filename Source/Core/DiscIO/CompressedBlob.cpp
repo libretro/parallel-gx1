@@ -34,10 +34,20 @@ static constexpr u64 uncompressed_flag = 1ULL << 63;
 
 bool IsGCZBlob(File::DirectIOFile& file);
 
-CompressedBlobReader::CompressedBlobReader(File::DirectIOFile file, std::string filename)
-    : m_file(std::move(file)), m_file_name(std::move(filename))
+// A copy of path on the heap, freed with free(); nullptr when out of memory
+static char* CopyPath(const char* path)
 {
-  m_valid = Initialize();
+  const size_t size = std::strlen(path) + 1;
+  char* const copy = static_cast<char*>(std::malloc(size));
+  if (copy)
+    std::memcpy(copy, path, size);
+  return copy;
+}
+
+CompressedBlobReader::CompressedBlobReader(File::DirectIOFile file, const char* filename)
+    : m_file(std::move(file)), m_file_name(CopyPath(filename))
+{
+  m_valid = m_file_name && Initialize();
 }
 
 bool CompressedBlobReader::Initialize()
@@ -103,8 +113,7 @@ bool CompressedBlobReader::Initialize()
   return ValidateBlockPointers();
 }
 
-CompressedBlobReader* CompressedBlobReader::Create(File::DirectIOFile file,
-                                                   const std::string& filename)
+CompressedBlobReader* CompressedBlobReader::Create(File::DirectIOFile file, const char* filename)
 {
   if (IsGCZBlob(file))
   {
@@ -124,6 +133,7 @@ CompressedBlobReader::~CompressedBlobReader()
   std::free(m_zlib_buffer);
   std::free(m_hashes);
   std::free(m_block_pointers);
+  std::free(m_file_name);
 }
 
 BlobReader* CompressedBlobReader::CopyReader() const
@@ -175,7 +185,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   if (!m_file.OffsetRead(offset, m_zlib_buffer, read_size))
   {
     ERROR_LOG(DISCIO, "The disc image \"%s\" is truncated, some of the data is missing.",
-              m_file_name.c_str());
+              m_file_name);
     return false;
   }
 
@@ -186,7 +196,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
     ERROR_LOG(DISCIO,
               "The disc image \"%s\" is corrupt.\n"
               "Hash of block %" PRIu64 " is %08x instead of %08x.",
-              m_file_name.c_str(), block_num, block_hash, m_hashes[block_num]);
+              m_file_name, block_num, block_hash, m_hashes[block_num]);
   }
 
   if (uncompressed)
