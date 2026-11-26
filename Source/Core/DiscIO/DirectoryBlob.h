@@ -5,9 +5,7 @@
 
 #include <cstddef>
 #include <cstring>
-#include <memory>
 #include <string>
-#include <variant>
 #include <vector>
 
 #include <retro_atomic.h>
@@ -17,11 +15,6 @@
 #include "DiscIO/Blob.h"
 #include "DiscIO/Volume.h"
 #include "DiscIO/WiiEncryptionCache.h"
-
-namespace File
-{
-struct FSTEntry;
-}  // namespace File
 
 struct RFILE;
 
@@ -137,45 +130,17 @@ ContentSource ContentMemory(ContentBlob* blob, u64 offset);
 ContentSource ContentBytes(const void* data, size_t size);
 ContentSource ContentPartition(u64 offset, u64 partition_data_offset);
 
-struct BuilderContentSource
-{
-  u64 m_offset = 0;
-  u64 m_size = 0;
-  ContentSource m_source;
-};
-
+// A file or folder of the FST being built. Plain data, freed with FreeFSTNodes.
 struct FSTBuilderNode
 {
-  std::string m_filename;
-  u64 m_size = 0;
-  std::variant<std::vector<BuilderContentSource>, std::vector<FSTBuilderNode>> m_content;
-
-  bool IsFile() const
-  {
-    return std::holds_alternative<std::vector<BuilderContentSource>>(m_content);
-  }
-
-  std::vector<BuilderContentSource>& GetFileContent()
-  {
-    return std::get<std::vector<BuilderContentSource>>(m_content);
-  }
-
-  const std::vector<BuilderContentSource>& GetFileContent() const
-  {
-    return std::get<std::vector<BuilderContentSource>>(m_content);
-  }
-
-  bool IsFolder() const { return std::holds_alternative<std::vector<FSTBuilderNode>>(m_content); }
-
-  std::vector<FSTBuilderNode>& GetFolderContent()
-  {
-    return std::get<std::vector<FSTBuilderNode>>(m_content);
-  }
-
-  const std::vector<FSTBuilderNode>& GetFolderContent() const
-  {
-    return std::get<std::vector<FSTBuilderNode>>(m_content);
-  }
+  char* m_filename;  // owned
+  // a file's size, or the number of entries under a folder
+  u64 m_size;
+  // a file's host path, owned; null for a folder
+  char* m_path;
+  // a folder's entries, owned
+  FSTBuilderNode* m_children;
+  u32 m_child_count;
 };
 
 // A content chunk placed at offset on the disc. Plain data: the container
@@ -253,16 +218,15 @@ private:
   u64 SetDOLFromFile(const char* path, u64 dol_address, u8* disc_header);
 
   void BuildFSTFromFolder(const char* fst_root_path, u64 fst_address, u8* disc_header);
-  void BuildFST(std::vector<FSTBuilderNode> root_nodes, u64 fst_address,
-                u8* disc_header);
+  // takes the nodes, which it may reorder
+  void BuildFST(FSTBuilderNode* root_nodes, u32 root_count, u64 fst_address, u8* disc_header);
 
   // FST creation
   void WriteEntryData(u8* fst_data, u32* entry_offset, u8 type, u32 name_offset,
                       u64 data_offset, u64 length, u32 address_shift);
-  void WriteEntryName(u8* fst_data, u32* name_offset, const std::string& name,
-                      u64 name_table_offset);
-  void WriteDirectory(u8* fst_data, std::vector<FSTBuilderNode>* parent_entries,
-                      u32* fst_offset, u32* name_offset, u64* data_offset, u32 parent_entry_index,
+  void WriteEntryName(u8* fst_data, u32* name_offset, const char* name, u64 name_table_offset);
+  void WriteDirectory(u8* fst_data, FSTBuilderNode* entries, u32 entry_count, u32* fst_offset,
+                      u32* name_offset, u64* data_offset, u32 parent_entry_index,
                       u64 name_table_offset);
 
   DiscContentContainer m_contents;

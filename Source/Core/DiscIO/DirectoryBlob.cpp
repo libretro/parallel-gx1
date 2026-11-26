@@ -5,13 +5,10 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <memory>
-#include <set>
-#include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
+#include <encodings/shiftjis.h>
 #include <retro_dirent.h>
 #include <streams/file_stream.h>
 
@@ -1184,24 +1181,95 @@ u64 DirectoryBlobPartition::SetDOLFromFile(const char* path, u64 dol_address, u8
   return Common::AlignUp(dol_address + dol_size + 0x20, 0x20ull);
 }
 
-static std::vector<FSTBuilderNode> ConvertFSTEntriesToBuilderNodes(const File::FSTEntry& parent)
+static void FreeFSTNodes(FSTBuilderNode* nodes, u32 count)
 {
-  std::vector<FSTBuilderNode> nodes;
-  nodes.reserve(parent.children.size());
-  for (const File::FSTEntry& entry : parent.children)
+  u32 i;
+  for (i = 0; i < count; i++)
   {
-    std::variant<std::vector<BuilderContentSource>, std::vector<FSTBuilderNode>> content;
-    if (entry.isDirectory)
-    {
-      content = ConvertFSTEntriesToBuilderNodes(entry);
-    }
-    else
-    {
-      content = std::vector<BuilderContentSource>{
-          {0, entry.size, ContentFile(entry.physicalName.c_str(), 0)}};
-    }
+    std::free(nodes[i].m_filename);
+    std::free(nodes[i].m_path);
+    FreeFSTNodes(nodes[i].m_children, nodes[i].m_child_count);
+  }
+  std::free(nodes);
+}
 
-    nodes.emplace_back(FSTBuilderNode{entry.virtualName, entry.size, std::move(content)});
+// The entries of the folder whose path is the length chars in path, a buffer of PATH_MAX_LENGTH
+// that the entries' paths are built in; an entry whose path does not fit is left out. Each file
+// gets its host path and size, and each folder its entries.
+static FSTBuilderNode* ScanFSTFolder(char* path, size_t length, u32* count)
+{
+  FSTBuilderNode* nodes = nullptr;
+  u32 capacity = 0;
+  u32 i;
+  struct RDIR* dir;
+
+  *count = 0;
+  path[length] = '\0';
+  dir = retro_opendir_include_hidden(path, true);
+  if (!dir)
+    return nullptr;
+  if (length && path[length - 1] != DIR_SEP_CHR)
+  {
+    if (length + 1 >= PATH_MAX_LENGTH)
+    {
+      retro_closedir(dir);
+      return nullptr;
+    }
+    path[length++] = DIR_SEP_CHR;
+  }
+
+  while (retro_readdir(dir))
+  {
+    const char* const name = retro_dirent_get_name(dir);
+    size_t name_length;
+    FSTBuilderNode* node;
+    if (!name || (name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2]))))
+      continue;
+    name_length = std::strlen(name);
+    if (length + name_length >= PATH_MAX_LENGTH)
+      continue;
+    if (*count == capacity)
+    {
+      const u32 new_capacity = capacity ? capacity * 2 : 16;
+      FSTBuilderNode* const grown =
+          static_cast<FSTBuilderNode*>(std::realloc(nodes, new_capacity * sizeof(FSTBuilderNode)));
+      if (!grown)
+        break;
+      nodes = grown;
+      capacity = new_capacity;
+    }
+    std::memcpy(path + length, name, name_length + 1);
+    node = &nodes[*count];
+    node->m_filename = CopyPath(name);
+    node->m_size = 0;
+    node->m_path = nullptr;
+    node->m_children = nullptr;
+    node->m_child_count = 0;
+    if (!node->m_filename)
+      continue;
+    if (!retro_dirent_is_dir(dir, nullptr))
+    {
+      int64_t size = 0;
+      node->m_path = CopyPath(path);
+      if (!node->m_path)
+      {
+        std::free(node->m_filename);
+        continue;
+      }
+      if (retro_dirent_stat(dir, &size, nullptr) && size > 0)
+        node->m_size = u64(size);
+    }
+    ++*count;
+  }
+  retro_closedir(dir);
+
+  for (i = 0; i < *count; i++)
+  {
+    if (nodes[i].m_path)
+      continue;
+    const size_t name_length = std::strlen(nodes[i].m_filename);
+    std::memcpy(path + length, nodes[i].m_filename, name_length + 1);
+    nodes[i].m_children = ScanFSTFolder(path, length + name_length, &nodes[i].m_child_count);
   }
   return nodes;
 }
@@ -1209,32 +1277,50 @@ static std::vector<FSTBuilderNode> ConvertFSTEntriesToBuilderNodes(const File::F
 void DirectoryBlobPartition::BuildFSTFromFolder(const char* fst_root_path, u64 fst_address,
                                                 u8* disc_header)
 {
-  auto nodes = ConvertFSTEntriesToBuilderNodes(File::ScanDirectoryTree(fst_root_path, true));
-  BuildFST(std::move(nodes), fst_address, disc_header);
+  // the root without its trailing separators
+  size_t length = std::strlen(fst_root_path);
+  char* const path = static_cast<char*>(std::malloc(PATH_MAX_LENGTH));
+  FSTBuilderNode* nodes = nullptr;
+  u32 count = 0;
+  while (length > 1 && fst_root_path[length - 1] == DIR_SEP_CHR)
+    length--;
+  if (path && length < PATH_MAX_LENGTH)
+  {
+    std::memcpy(path, fst_root_path, length);
+    nodes = ScanFSTFolder(path, length, &count);
+  }
+  std::free(path);
+  BuildFST(nodes, count, fst_address, disc_header);
 }
 
-static void ConvertUTF8NamesToSHIFTJIS(std::vector<FSTBuilderNode>* fst)
+static void ConvertUTF8NamesToSHIFTJIS(FSTBuilderNode* nodes, u32 count)
 {
-  for (FSTBuilderNode& entry : *fst)
+  u32 i;
+  for (i = 0; i < count; i++)
   {
-    if (entry.IsFolder())
-      ConvertUTF8NamesToSHIFTJIS(&entry.GetFolderContent());
-    entry.m_filename = UTF8ToSHIFTJIS(entry.m_filename);
+    FSTBuilderNode& entry = nodes[i];
+    const size_t length = std::strlen(entry.m_filename);
+    char* const converted = static_cast<char*>(std::malloc(length + 1));
+    if (!entry.m_path)
+      ConvertUTF8NamesToSHIFTJIS(entry.m_children, entry.m_child_count);
+    if (!converted)
+      continue;
+    // at most an octet out per octet in
+    converted[utf8_to_sjis(converted, length + 1, entry.m_filename, length)] = '\0';
+    std::free(entry.m_filename);
+    entry.m_filename = converted;
   }
 }
 
-static u32 ComputeNameSize(const FSTBuilderNode* files, size_t count)
+static u32 ComputeNameSize(const FSTBuilderNode* files, u32 count)
 {
   u32 name_size = 0;
-  for (size_t i = 0; i < count; i++)
+  for (u32 i = 0; i < count; i++)
   {
     const FSTBuilderNode& entry = files[i];
-    if (entry.IsFolder())
-    {
-      const std::vector<FSTBuilderNode>& children = entry.GetFolderContent();
-      name_size += ComputeNameSize(children.data(), children.size());
-    }
-    name_size += static_cast<u32>(entry.m_filename.length() + 1);
+    if (!entry.m_path)
+      name_size += ComputeNameSize(entry.m_children, entry.m_child_count);
+    name_size += static_cast<u32>(std::strlen(entry.m_filename) + 1);
   }
   return name_size;
 }
@@ -1242,8 +1328,8 @@ static u32 ComputeNameSize(const FSTBuilderNode* files, size_t count)
 // Upper-cased ASCII order, then plain order, compared in place.
 static bool NameLess(const FSTBuilderNode& one, const FSTBuilderNode& two)
 {
-  const unsigned char* a = reinterpret_cast<const unsigned char*>(one.m_filename.c_str());
-  const unsigned char* b = reinterpret_cast<const unsigned char*>(two.m_filename.c_str());
+  const unsigned char* a = reinterpret_cast<const unsigned char*>(one.m_filename);
+  const unsigned char* b = reinterpret_cast<const unsigned char*>(two.m_filename);
   size_t i;
   for (i = 0;; i++)
   {
@@ -1257,7 +1343,7 @@ static bool NameLess(const FSTBuilderNode& one, const FSTBuilderNode& two)
     if (!a[i])
       break;
   }
-  return one.m_filename < two.m_filename;
+  return std::strcmp(one.m_filename, two.m_filename) < 0;
 }
 
 // In-place heap sort: no allocation, O(n log n); names are unique so
@@ -1273,7 +1359,9 @@ static void SiftDown(FSTBuilderNode* nodes, size_t root, size_t count)
       child++;
     if (!NameLess(nodes[root], nodes[child]))
       return;
-    std::swap(nodes[root], nodes[child]);
+    const FSTBuilderNode moved = nodes[root];
+    nodes[root] = nodes[child];
+    nodes[child] = moved;
     root = child;
   }
 }
@@ -1287,42 +1375,49 @@ static void SortByName(FSTBuilderNode* nodes, size_t count)
     SiftDown(nodes, i - 1, count);
   for (i = count - 1; i > 0; i--)
   {
-    std::swap(nodes[0], nodes[i]);
+    const FSTBuilderNode moved = nodes[0];
+    nodes[0] = nodes[i];
+    nodes[i] = moved;
     SiftDown(nodes, 0, i);
   }
 }
 
-static size_t RecalculateFolderSizes(std::vector<FSTBuilderNode>* fst)
+static size_t RecalculateFolderSizes(FSTBuilderNode* nodes, u32 count)
 {
   size_t size = 0;
-  for (FSTBuilderNode& entry : *fst)
+  for (u32 i = 0; i < count; i++)
   {
+    FSTBuilderNode& entry = nodes[i];
     ++size;
-    if (entry.IsFile())
+    if (entry.m_path)
       continue;
 
-    entry.m_size = RecalculateFolderSizes(&entry.GetFolderContent());
+    entry.m_size = RecalculateFolderSizes(entry.m_children, entry.m_child_count);
     size += entry.m_size;
   }
   return size;
 }
 
-void DirectoryBlobPartition::BuildFST(std::vector<FSTBuilderNode> root_nodes, u64 fst_address,
+void DirectoryBlobPartition::BuildFST(FSTBuilderNode* root_nodes, u32 root_count, u64 fst_address,
                                       u8* disc_header)
 {
-  ConvertUTF8NamesToSHIFTJIS(&root_nodes);
+  ConvertUTF8NamesToSHIFTJIS(root_nodes, root_count);
 
-  u32 name_table_size = Common::AlignUp(ComputeNameSize(root_nodes.data(), root_nodes.size()), 1ull << m_address_shift);
+  u32 name_table_size =
+      Common::AlignUp(ComputeNameSize(root_nodes, root_count), 1ull << m_address_shift);
 
   // 1 extra for the root entry
-  u64 total_entries = RecalculateFolderSizes(&root_nodes) + 1;
+  u64 total_entries = RecalculateFolderSizes(root_nodes, root_count) + 1;
 
   const u64 name_table_offset = total_entries * ENTRY_SIZE;
   // built in place, then added as it stands
   const u64 fst_size = name_table_offset + name_table_size;
   ContentBlob* const fst_blob = ZeroedBlob(size_t(fst_size));
   if (!fst_blob)
+  {
+    FreeFSTNodes(root_nodes, root_count);
     return;
+  }
   u8* const fst_data = ContentBlobData(fst_blob);
 
   // 32 KiB aligned start of data on disc
@@ -1335,8 +1430,9 @@ void DirectoryBlobPartition::BuildFST(std::vector<FSTBuilderNode> root_nodes, u6
   // write root entry
   WriteEntryData(fst_data, &fst_offset, DIRECTORY_ENTRY, 0, 0, total_entries, m_address_shift);
 
-  WriteDirectory(fst_data, &root_nodes, &fst_offset, &name_offset, &current_data_address,
+  WriteDirectory(fst_data, root_nodes, root_count, &fst_offset, &name_offset, &current_data_address,
                  root_offset, name_table_offset);
+  FreeFSTNodes(root_nodes, root_count);
 
   // overflow check, compare the aligned name offset with the aligned name table size
   ASSERT(Common::AlignUp(name_offset, 1ull << m_address_shift) == name_table_size);
@@ -1368,36 +1464,34 @@ void DirectoryBlobPartition::WriteEntryData(u8* fst_data, u32* entry_offset, u8 
   *entry_offset += 4;
 }
 
-void DirectoryBlobPartition::WriteEntryName(u8* fst_data, u32* name_offset,
-                                            const std::string& name, u64 name_table_offset)
+void DirectoryBlobPartition::WriteEntryName(u8* fst_data, u32* name_offset, const char* name,
+                                            u64 name_table_offset)
 {
-  std::memcpy(fst_data + *name_offset + name_table_offset, name.c_str(), name.length() + 1);
+  const size_t size = std::strlen(name) + 1;
+  std::memcpy(fst_data + *name_offset + name_table_offset, name, size);
 
-  *name_offset += (u32)(name.length() + 1);
+  *name_offset += (u32)size;
 }
 
-void DirectoryBlobPartition::WriteDirectory(u8* fst_data,
-                                            std::vector<FSTBuilderNode>* parent_entries,
+void DirectoryBlobPartition::WriteDirectory(u8* fst_data, FSTBuilderNode* entries, u32 entry_count,
                                             u32* fst_offset, u32* name_offset, u64* data_offset,
                                             u32 parent_entry_index, u64 name_table_offset)
 {
-  std::vector<FSTBuilderNode>& sorted_entries = *parent_entries;
-
   // Sort for determinism
-  SortByName(sorted_entries.data(), sorted_entries.size());
+  SortByName(entries, entry_count);
 
-  for (FSTBuilderNode& entry : sorted_entries)
+  for (u32 i = 0; i < entry_count; i++)
   {
-    if (entry.IsFolder())
+    FSTBuilderNode& entry = entries[i];
+    if (!entry.m_path)
     {
       u32 entry_index = *fst_offset / ENTRY_SIZE;
       WriteEntryData(fst_data, fst_offset, DIRECTORY_ENTRY, *name_offset, parent_entry_index,
                      entry_index + entry.m_size + 1, 0);
       WriteEntryName(fst_data, name_offset, entry.m_filename, name_table_offset);
 
-      auto& child_nodes = entry.GetFolderContent();
-      WriteDirectory(fst_data, &child_nodes, fst_offset, name_offset, data_offset, entry_index,
-                     name_table_offset);
+      WriteDirectory(fst_data, entry.m_children, entry.m_child_count, fst_offset, name_offset,
+                     data_offset, entry_index, name_table_offset);
     }
     else
     {
@@ -1415,12 +1509,7 @@ void DirectoryBlobPartition::WriteDirectory(u8* fst_data,
       WriteEntryName(fst_data, name_offset, entry.m_filename, name_table_offset);
 
       // write entry to virtual disc
-      auto& contents = entry.GetFileContent();
-      for (BuilderContentSource& content : contents)
-      {
-        m_contents.Add(*data_offset + content.m_offset, content.m_size,
-                       content.m_source);
-      }
+      m_contents.Add(*data_offset, entry.m_size, ContentFile(entry.m_path, 0));
 
       // For most files, an alignment of 0x20 is enough. But some files need 0x8000,
       // in particular all DTK audio files in GameCube games.
