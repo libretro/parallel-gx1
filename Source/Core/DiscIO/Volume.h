@@ -147,12 +147,12 @@ void DestroyVolume(Volume* volume);
 // A volume made is the caller's, freed with DestroyVolume; nullptr if none could be. These take
 // the reader they are given, a volume made or not.
 VolumeDisc* CreateDisc(BlobReader* reader);
-VolumeDisc* CreateDisc(const std::string& path);
+VolumeDisc* CreateDisc(const char* path);
 // This version enables caching when the "Load Games into Memory" setting is enabled.
-VolumeDisc* CreateDiscForCore(const std::string& path);
+VolumeDisc* CreateDiscForCore(const char* path);
 
 VolumeWAD* CreateWAD(BlobReader* reader);
-VolumeWAD* CreateWAD(const std::string& path);
+VolumeWAD* CreateWAD(const char* path);
 Volume* CreateVolume(BlobReader* reader);
 
 }  // namespace DiscIO

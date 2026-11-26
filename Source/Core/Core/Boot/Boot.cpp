@@ -566,7 +566,7 @@ static void SetDefaultDisc(DVD::DVDInterface& dvd_interface)
 {
   const std::string default_iso = Config::Get(Config::MAIN_DEFAULT_ISO);
   if (!default_iso.empty())
-    SetDisc(dvd_interface, DiscIO::CreateDiscForCore(default_iso));
+    SetDisc(dvd_interface, DiscIO::CreateDiscForCore(default_iso.c_str()));
 }
 
 static void CopyDefaultExceptionHandlers(Core::System& system)

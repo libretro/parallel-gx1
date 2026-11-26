@@ -226,12 +226,12 @@ VolumeDisc* CreateDisc(BlobReader* reader)
   return disc;
 }
 
-VolumeDisc* CreateDisc(const std::string& path)
+VolumeDisc* CreateDisc(const char* path)
 {
   return CreateDisc(CreateBlobReader(path));
 }
 
-VolumeDisc* CreateDiscForCore(const std::string& path)
+VolumeDisc* CreateDiscForCore(const char* path)
 {
   BlobReader* reader = CreateBlobReader(path);
 
@@ -270,7 +270,7 @@ VolumeWAD* CreateWAD(BlobReader* reader)
   return wad;
 }
 
-VolumeWAD* CreateWAD(const std::string& path)
+VolumeWAD* CreateWAD(const char* path)
 {
   return CreateWAD(CreateBlobReader(path));
 }

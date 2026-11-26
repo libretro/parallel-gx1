@@ -364,7 +364,7 @@ u32 SectorReader::ReadChunk(u8* buffer, u64 chunk_num)
   return 0;
 }
 
-BlobReader* CreateBlobReader(const std::string& filename)
+BlobReader* CreateBlobReader(const char* filename)
 {
   File::DirectIOFile file(filename, File::AccessMode::Read);
   u32 magic;

@@ -230,7 +230,7 @@ private:
 
 // Factory function - examines the path to choose the right type of BlobReader, and returns one.
 // Owned by the caller, nullptr if the file cannot be read as a disc
-BlobReader* CreateBlobReader(const std::string& filename);
+BlobReader* CreateBlobReader(const char* filename);
 
 // Destroys a reader as the class it is and frees it; nullptr does nothing.
 void DestroyBlobReader(BlobReader* reader);
