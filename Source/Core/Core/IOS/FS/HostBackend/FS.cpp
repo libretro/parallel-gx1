@@ -382,55 +382,25 @@ void FileSystem::DoState(PointerWrap& p)
   CloseAllHandles();
 
   // The format for the next part of the save state is follows:
-  // 1. bool is_full_nand_in_state (movie active && temporary wii root)
+  // 1. bool is_full_nand_in_state, which only movie recordings ever set.
   // 2. Contents of the "/tmp" directory recursively.
-  // 3. u32 size_of_nand (or 0, if not is_full_nand_in_state).
-  // 4. Contents of the "/" directory recursively (or nothing, if the
-  // root of the NAND folder is not save stated).
-
-  // The "/" directory is only saved when a savestate is made during a movie recording
-  // and when the directory root is temporary (i.e. WiiSession).
-  // If a save state is made during a movie recording and is loaded when no movie is active,
-  // then a call to p.DoExternal() will be used to skip over reading the contents of the "/"
-  // directory (it skips over the number of bytes specified by size_of_nand)
-
-  // No movie is ever recorded, so the full NAND is never wanted.
-  const bool is_full_nand_wanted = false;
-
-  bool is_full_nand_in_state = is_full_nand_wanted;
+  // 3. u32 size_of_nand, then that many bytes of the "/" directory, which are skipped.
+  bool is_full_nand_in_state = false;
   p.Do(is_full_nand_in_state);
+  u32 size_of_nand = 0;
 
   if (!p.IsReadMode())
   {
     DoStateWriteOrMeasure(p, "/tmp");
-    u8* const nand_size_ptr = p.ReserveU32();
-    if (is_full_nand_in_state)
-    {
-      DoStateWriteOrMeasure(p, "/");
-      if (p.IsWriteMode())
-      {
-        const u32 size_of_nand = p.GetOffsetFromPreviousPosition(nand_size_ptr) - sizeof(u32);
-        memcpy(nand_size_ptr, &size_of_nand, sizeof(size_of_nand));
-      }
-    }
+    p.Do(size_of_nand);
 
     for (i = 0; i < NUM_HANDLES; i++)
       m_handles[i] = std::move(handles_copy[i]);
   }
-  else  // case where we're in read mode.
+  else
   {
-    u32 size_of_nand = 0;
     DoStateRead(p, "/tmp");
-    if (is_full_nand_in_state && is_full_nand_wanted)
-    {
-      p.Do(size_of_nand);
-      DoStateRead(p, "/");
-    }
-    else
-    {
-      // Skip over any NAND data without using it.
-      (void)p.DoExternal(size_of_nand);
-    }
+    (void)p.DoExternal(size_of_nand);
   }
 
   for (i = 0; i < NUM_HANDLES; i++)

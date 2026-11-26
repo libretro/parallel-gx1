@@ -171,48 +171,13 @@ ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const char* path, FileAt
 
 void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
 {
-  const auto delete_ = [this](const std::string& directory_path_) {
-    const ResultCode delete_result = Delete(0, 0, directory_path_.c_str());
-    if (delete_result != ResultCode::Success && delete_result != ResultCode::NotFound)
-    {
-      ERROR_LOG(IOS_FS, "DoStateRead failed to call Delete for %s: %u", directory_path_.c_str(),
-                static_cast<unsigned>(delete_result));
-      return false;
-    }
-    return true;
-  };
-
-  if (directory_path != "/")
+  const ResultCode delete_result = Delete(0, 0, directory_path.c_str());
+  if (delete_result != ResultCode::Success && delete_result != ResultCode::NotFound)
   {
-    if (!delete_(directory_path))
-    {
-      p.SetVerifyMode();
-      return;
-    }
-  }
-  else
-  {
-    // Calling Delete for the root would return Invalid. Let's delete all children instead.
-    DirectoryList children;
-    const ResultCode list_result = ReadDirectory(0, 0, directory_path.c_str(), &children);
-    if (list_result != ResultCode::Success)
-    {
-      ERROR_LOG(IOS_FS, "DoStateRead failed to call ReadDirectory for %s: %u",
-                directory_path.c_str(), static_cast<unsigned>(list_result));
-      p.SetVerifyMode();
-      return;
-    }
-
-    for (u32 i = 0; i < children.count; i++)
-    {
-      if (!delete_(directory_path + children.names[i]))
-      {
-        FreeDirectoryList(&children);
-        p.SetVerifyMode();
-        return;
-      }
-    }
-    FreeDirectoryList(&children);
+    ERROR_LOG(IOS_FS, "DoStateRead failed to call Delete for %s: %u", directory_path.c_str(),
+              static_cast<unsigned>(delete_result));
+    p.SetVerifyMode();
+    return;
   }
 
   Metadata metadata{};
@@ -224,20 +189,15 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
   p.Do(metadata.size);
   p.Do(metadata.fst_index);
 
-  // Again here, calling CreateDirectory for the root would return Invalid.
-  // The root always exists, so we can skip creating it.
-  if (directory_path != "/")
+  // UID 0 is used to avoid AccessDenied.
+  const ResultCode create_directory_result =
+      CreateDirectory(0, 0, directory_path.c_str(), metadata.attribute, metadata.modes);
+  if (create_directory_result != ResultCode::Success)
   {
-    // UID 0 is used to avoid AccessDenied.
-    const ResultCode create_directory_result =
-        CreateDirectory(0, 0, directory_path.c_str(), metadata.attribute, metadata.modes);
-    if (create_directory_result != ResultCode::Success)
-    {
-      ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateDirectory for %s: %u",
-                directory_path.c_str(), static_cast<unsigned>(create_directory_result));
-      p.SetVerifyMode();
-      return;
-    }
+    ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateDirectory for %s: %u",
+              directory_path.c_str(), static_cast<unsigned>(create_directory_result));
+    p.SetVerifyMode();
+    return;
   }
 
   // Change the UID and GID from 0 to the intended values.
