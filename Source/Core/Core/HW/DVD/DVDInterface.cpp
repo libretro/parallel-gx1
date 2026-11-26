@@ -78,9 +78,15 @@ constexpr u32 DI_CONFIG_REGISTER = 0x24;
 
 DVDInterface::DVDInterface(Core::System& system) : m_system(system)
 {
+  path_list_init(&m_disc_path_to_insert);
+  path_list_init(&m_auto_disc_change_paths);
 }
 
-DVDInterface::~DVDInterface() = default;
+DVDInterface::~DVDInterface()
+{
+  path_list_free(&m_disc_path_to_insert);
+  path_list_free(&m_auto_disc_change_paths);
+}
 
 static u64 PackFinishExecutingCommandUserdata(ReplyType reply_type, DIInterruptType interrupt_type);
 
@@ -114,7 +120,26 @@ void DVDInterface::DoState(PointerWrap& p)
   p.Do(m_read_buffer_start_offset);
   p.Do(m_read_buffer_end_offset);
 
-  p.Do(m_disc_path_to_insert);
+  // As a string was: its length, then its characters.
+  if (p.IsReadMode())
+  {
+    u32 path_length = 0;
+    const u8* const path = p.DoExternal(path_length);
+    path_list_clear(&m_disc_path_to_insert);
+    if (p.IsReadMode() && path_length)
+    {
+      path_list_add_len(&m_disc_path_to_insert, reinterpret_cast<const char*>(path), path_length);
+    }
+  }
+  else
+  {
+    const char* const path =
+        m_disc_path_to_insert.count ? path_list_get(&m_disc_path_to_insert, 0) : "";
+    u32 path_length = static_cast<u32>(std::strlen(path));
+    p.Do(path_length);
+    // Only read from when writing or measuring
+    p.DoArray(const_cast<char*>(path), path_length);
+  }
 
   m_system.GetDVDThread().DoState(p);
 
@@ -376,8 +401,7 @@ static u64 GetDiscEndOffset(const DiscIO::VolumeDisc& disc)
     return DiscIO::DL_DVD_SIZE;
 }
 
-void DVDInterface::SetDisc(DiscIO::VolumeDisc* disc,
-                           const std::vector<std::string>* auto_disc_change_paths)
+void DVDInterface::SetDisc(DiscIO::VolumeDisc* disc, const path_list_t* auto_disc_change_paths)
 {
   bool had_disc = IsDiscInside();
   bool has_disc = disc != nullptr;
@@ -407,10 +431,10 @@ void DVDInterface::SetDisc(DiscIO::VolumeDisc* disc,
 
   if (auto_disc_change_paths)
   {
-    ASSERT_MSG(DISCIO, auto_disc_change_paths->size() != 1,
+    ASSERT_MSG(DISCIO, auto_disc_change_paths->count != 1,
                "Cannot automatically change between one disc");
 
-    m_auto_disc_change_paths = *auto_disc_change_paths;
+    path_list_copy(&m_auto_disc_change_paths, auto_disc_change_paths);
     m_auto_disc_change_index = 0;
   }
 
@@ -442,7 +466,10 @@ void DVDInterface::EjectDiscCallback(Core::System& system, u64 userdata, s64 cyc
 void DVDInterface::InsertDiscCallback(Core::System& system, u64 userdata, s64 cyclesLate)
 {
   auto& di = system.GetDVDInterface();
-  DiscIO::VolumeDisc* new_disc = DiscIO::CreateDiscForCore(di.m_disc_path_to_insert);
+  DiscIO::VolumeDisc* new_disc =
+      di.m_disc_path_to_insert.count ?
+          DiscIO::CreateDiscForCore(path_list_get(&di.m_disc_path_to_insert, 0)) :
+          nullptr;
 
   if (new_disc)
   {
@@ -453,7 +480,7 @@ void DVDInterface::InsertDiscCallback(Core::System& system, u64 userdata, s64 cy
     PanicAlert("The disc that was about to be inserted couldn't be found.");
   }
 
-  di.m_disc_path_to_insert.clear();
+  path_list_clear(&di.m_disc_path_to_insert);
 }
 
 // Must only be called on the CPU thread
@@ -465,23 +492,9 @@ void DVDInterface::EjectDisc(EjectCause cause)
 }
 
 // Must only be called on the CPU thread
-void DVDInterface::ChangeDisc(const std::vector<std::string>& paths)
+void DVDInterface::ChangeDisc(const char* new_path)
 {
-  ASSERT_MSG(DISCIO, !paths.empty(), "Trying to insert an empty list of discs");
-
-  if (paths.size() > 1)
-  {
-    m_auto_disc_change_paths = paths;
-    m_auto_disc_change_index = 0;
-  }
-
-  ChangeDisc(paths[0]);
-}
-
-// Must only be called on the CPU thread
-void DVDInterface::ChangeDisc(const std::string& new_path)
-{
-  if (!m_disc_path_to_insert.empty())
+  if (m_disc_path_to_insert.count)
   {
     PanicAlert("A disc is already about to be inserted.");
     return;
@@ -489,30 +502,28 @@ void DVDInterface::ChangeDisc(const std::string& new_path)
 
   EjectDisc(EjectCause::User);
 
-  m_disc_path_to_insert = new_path;
+  path_list_add(&m_disc_path_to_insert, new_path);
   m_system.GetCoreTiming().ScheduleEvent(m_system.GetSystemTimers().GetTicksPerSecond(),
                                          m_insert_disc);
 
-  for (size_t i = 0; i < m_auto_disc_change_paths.size(); ++i)
+  const int index = path_list_find(&m_auto_disc_change_paths, new_path);
+  if (index >= 0)
   {
-    if (m_auto_disc_change_paths[i] == new_path)
-    {
-      m_auto_disc_change_index = i;
-      return;
-    }
+    m_auto_disc_change_index = static_cast<unsigned>(index);
+    return;
   }
 
-  m_auto_disc_change_paths.clear();
+  path_list_clear(&m_auto_disc_change_paths);
 }
 
 // Must only be called on the CPU thread
 bool DVDInterface::AutoChangeDisc()
 {
-  if (m_auto_disc_change_paths.empty())
+  if (!m_auto_disc_change_paths.count)
     return false;
 
-  m_auto_disc_change_index = (m_auto_disc_change_index + 1) % m_auto_disc_change_paths.size();
-  ChangeDisc(m_auto_disc_change_paths[m_auto_disc_change_index]);
+  m_auto_disc_change_index = (m_auto_disc_change_index + 1) % m_auto_disc_change_paths.count;
+  ChangeDisc(path_list_get(&m_auto_disc_change_paths, m_auto_disc_change_index));
   return true;
 }
 
@@ -1116,7 +1127,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     const bool force_eject = eject && !kill;
 
     if (Config::Get(Config::MAIN_AUTO_DISC_CHANGE) &&
-        m_system.GetDVDThread().IsInsertedDiscRunning() && !m_auto_disc_change_paths.empty())
+        m_system.GetDVDThread().IsInsertedDiscRunning() && m_auto_disc_change_paths.count)
     {
       m_system.GetCoreTiming().ScheduleEvent(
           force_eject ? 0 : m_system.GetSystemTimers().GetTicksPerSecond() / 2, m_auto_change_disc);

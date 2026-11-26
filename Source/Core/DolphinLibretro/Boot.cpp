@@ -882,8 +882,9 @@ bool retro_load_game(const struct retro_game_info* game)
   VideoBackendBase::PopulateBackendInfo();
   NOTICE_LOG(VIDEO, "Using GFX backend: %s", Config::Get(Config::MAIN_GFX_BACKEND).c_str());
 
-  std::vector<std::string> normalized_game_paths;
-  normalized_game_paths.push_back(game->path);
+  path_list_t normalized_game_paths;
+  path_list_init(&normalized_game_paths);
+  path_list_add(&normalized_game_paths, game->path);
 
   /* The content's folder ends after its last '/' (or '\\' or ':' on
    * Windows, for a path like "C:x.iso"), its name runs from there to its last
@@ -915,31 +916,36 @@ bool retro_load_game(const struct retro_game_info* game)
   if (Common::CaseInsensitiveEquals(extension, ".m3u") ||
       Common::CaseInsensitiveEquals(extension, ".m3u8"))
   {
-    normalized_game_paths =
-        ReadM3UFile(normalized_game_paths.front(), std::string(game_path, dir_end));
-    if (normalized_game_paths.empty())
+    const std::string folder_path(game_path, dir_end);
+    ReadM3UFile(game->path, folder_path.c_str(), &normalized_game_paths);
+    if (!normalized_game_paths.count)
     {
       ERROR_LOG(BOOT, "Could not boot %s. M3U contains no paths", game->path);
+      path_list_free(&normalized_game_paths);
       UndoFailedLoad(false);
       return false;
     }
   }
 
-  for (const std::string& normalized_game_path : normalized_game_paths)
-    Libretro::DiskPathsAppend(normalized_game_path.c_str());
+  for (i = 0; i < normalized_game_paths.count; i++)
+    Libretro::DiskPathsAppend(path_list_get(&normalized_game_paths, static_cast<unsigned>(i)));
   Libretro::disk_index = Libretro::TakeInitialDisk();
   if (Libretro::disk_index)
   {
     /* Boot starts on the first path and changes disc through the rest in turn: the list starts
      * at the disc asked for, in the playlist's order from there */
-    const size_t count = normalized_game_paths.size();
-    std::vector<std::string> from_initial;
-    from_initial.reserve(count);
+    const unsigned count = normalized_game_paths.count;
+    path_list_t from_initial;
+    path_list_init(&from_initial);
     for (i = 0; i < count; i++)
-      from_initial.push_back(normalized_game_paths[(Libretro::disk_index + i) % count]);
-    normalized_game_paths.swap(from_initial);
-    NOTICE_LOG(BOOT, "Starting on disc %u of %u: %s", Libretro::disk_index + 1,
-               static_cast<unsigned>(count), normalized_game_paths.front().c_str());
+    {
+      path_list_add(&from_initial,
+                    path_list_get(&normalized_game_paths,
+                                  static_cast<unsigned>((Libretro::disk_index + i) % count)));
+    }
+    path_list_move(&normalized_game_paths, &from_initial);
+    NOTICE_LOG(BOOT, "Starting on disc %u of %u: %s", Libretro::disk_index + 1, count,
+               path_list_get(&normalized_game_paths, 0));
   }
 
   Libretro::Input::Init();
@@ -958,14 +964,19 @@ bool retro_load_game(const struct retro_game_info* game)
   }
 
   const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
-  BootParameters* boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
+  // The boot takes its own copy of the paths, as it moves them out and changes their separators.
+  path_list_t boot_paths;
+  path_list_init(&boot_paths);
+  path_list_copy(&boot_paths, &normalized_game_paths);
+  BootParameters* boot_params = BootParameters::GenerateFromFile(&boot_paths);
+  path_list_free(&boot_paths);
 
   if (disc_based_games_boot_to_wii_menu)
   {
     bool is_disc_title = false;
-    if (!normalized_game_paths.empty())
+    if (normalized_game_paths.count)
     {
-      DiscIO::VolumeDisc* volume = DiscIO::CreateDisc(normalized_game_paths.front());
+      DiscIO::VolumeDisc* volume = DiscIO::CreateDisc(path_list_get(&normalized_game_paths, 0));
       if (volume && (volume->GetVolumeType() == DiscIO::Platform::WiiDisc || volume->GetVolumeType() == DiscIO::Platform::GameCubeDisc))
         is_disc_title = true;
       else
@@ -988,11 +999,14 @@ bool retro_load_game(const struct retro_game_info* game)
 
     if (is_disc_title && wii_menu_installed)
     {
-      Config::SetBase(Config::MAIN_DEFAULT_ISO, normalized_game_paths.front());
+      Config::SetBase(Config::MAIN_DEFAULT_ISO,
+                      std::string(path_list_get(&normalized_game_paths, 0)));
       delete boot_params;
       boot_params = new BootParameters(BootParameters::NANDTitle{Titles::SYSTEM_MENU});
     }
   }
+
+  path_list_free(&normalized_game_paths);
 
   if (boot_params)
     Libretro::SetRegionFreeFallback(*boot_params);

@@ -383,6 +383,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/CallGate.c \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
+	$(CORE_DIR)/Source/Core/Common/PathList.c \
 	$(CORE_DIR)/Source/Core/Common/Hash.c \
 	$(CORE_DIR)/Source/Core/Common/IniData.c \
 	$(CORE_DIR)/Source/Core/Common/HttpService.c \

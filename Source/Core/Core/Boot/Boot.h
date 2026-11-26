@@ -11,6 +11,7 @@
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
+#include "Common/PathList.h"
 #include "Core/IOS/IOSC.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Enums.h"
@@ -65,9 +66,9 @@ struct BootParameters
   struct Disc
   {
     Disc() = default;
-    // takes volume
+    // takes volume, and moves the paths out of auto_disc_change_paths_ when it is not null
     Disc(std::string path_, DiscIO::VolumeDisc* volume_,
-         std::vector<std::string> auto_disc_change_paths_);
+         path_list_t* auto_disc_change_paths_ = nullptr);
     // the volume goes with it
     Disc(Disc&& other) noexcept;
     Disc& operator=(Disc&& other) noexcept;
@@ -77,7 +78,7 @@ struct BootParameters
 
     std::string path;
     DiscIO::VolumeDisc* volume = nullptr;  // owned
-    std::vector<std::string> auto_disc_change_paths;
+    path_list_t auto_disc_change_paths = {};
   };
 
   struct Executable
@@ -115,10 +116,9 @@ struct BootParameters
     std::string dff_path;
   };
 
-  // The caller's, freed with delete; nullptr when the file is not recognized
-  static BootParameters* GenerateFromFile(std::string boot_path,
-                                          BootSessionData boot_session_data_ = BootSessionData());
-  static BootParameters* GenerateFromFile(std::vector<std::string> paths,
+  // The caller's, freed with delete; nullptr when the file is not recognized. The first path is
+  // booted, and the paths are moved out of the list when there are more for disc changes.
+  static BootParameters* GenerateFromFile(path_list_t* paths,
                                           BootSessionData boot_session_data_ = BootSessionData());
 
   using Parameters = std::variant<Disc, Executable, DiscIO::VolumeWAD, NANDTitle, IPL, DFF>;
@@ -222,4 +222,6 @@ void UpdateStateFlags(void (*update_function)(StateFlags*));
 /// but we cannot rely on this because we don't require any system titles to be installed.
 void CreateSystemMenuTitleDirs();
 
-std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path);
+// Fills paths with the existing files an M3U file lists, left empty when one is missing or there
+// are none.
+void ReadM3UFile(const char* m3u_path, const char* folder_path, path_list_t* paths);

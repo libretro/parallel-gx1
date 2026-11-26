@@ -58,9 +58,9 @@ namespace
 /* What reading an M3U file has found so far */
 struct M3UReader
 {
-  const std::string* m3u_path;
-  const std::string* folder_path;
-  std::vector<std::string>* result;
+  const char* m3u_path;
+  const char* folder_path;
+  path_list_t* result;
   /* the paths not found, a line each, cut when they run past it */
   char missing[1024];
   size_t missing_len;
@@ -76,7 +76,7 @@ static void ReadM3ULine(void* ud, const char* text, size_t length)
 
   if (length >= 3 && !memcmp(text, utf8_bom, 3))
   {
-    WARN_LOG(BOOT, "UTF-8 BOM in file: %s", reader->m3u_path->c_str());
+    WARN_LOG(BOOT, "UTF-8 BOM in file: %s", reader->m3u_path);
     text += 3;
     length -= 3;
   }
@@ -84,10 +84,10 @@ static void ReadM3ULine(void* ud, const char* text, size_t length)
   if (!length || text[0] == '#') /* Comments start with # */
     return;
 
-  std::string path_to_add = File::JoinPath(*reader->folder_path, std::string(text, length));
+  std::string path_to_add = File::JoinPath(reader->folder_path, std::string(text, length));
   if (File::Exists(path_to_add))
   {
-    reader->result->push_back(std::move(path_to_add));
+    path_list_add(reader->result, path_to_add.c_str());
   }
   else if (reader->missing_len < sizeof(reader->missing))
   {
@@ -99,28 +99,27 @@ static void ReadM3ULine(void* ud, const char* text, size_t length)
   }
 }
 
-std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path)
+void ReadM3UFile(const char* m3u_path, const char* folder_path, path_list_t* paths)
 {
-  std::vector<std::string> result;
   M3UReader reader;
 
-  reader.m3u_path = &m3u_path;
-  reader.folder_path = &folder_path;
-  reader.result = &result;
+  path_list_clear(paths);
+  reader.m3u_path = m3u_path;
+  reader.folder_path = folder_path;
+  reader.result = paths;
   reader.missing_len = 0;
   File::ForEachLine(m3u_path, ReadM3ULine, &reader);
 
   if (reader.missing_len)
   {
-    PanicAlert("Files specified in the M3U file \"%s\" were not found:\n%s", m3u_path.c_str(),
+    PanicAlert("Files specified in the M3U file \"%s\" were not found:\n%s", m3u_path,
                reader.missing);
-    return {};
+    path_list_clear(paths);
+    return;
   }
 
-  if (result.empty())
-    PanicAlert("No paths found in the M3U file \"%s\"", m3u_path.c_str());
-
-  return result;
+  if (!paths->count)
+    PanicAlert("No paths found in the M3U file \"%s\"", m3u_path);
 }
 
 BootSessionData::BootSessionData()
@@ -138,38 +137,35 @@ BootParameters::BootParameters(Parameters&& parameters_, BootSessionData boot_se
 {
 }
 
-BootParameters* BootParameters::GenerateFromFile(std::string boot_path,
+BootParameters* BootParameters::GenerateFromFile(path_list_t* paths,
                                                  BootSessionData boot_session_data_)
 {
-  return GenerateFromFile(std::vector<std::string>{std::move(boot_path)},
-                          std::move(boot_session_data_));
-}
+  ASSERT(paths->count);
 
-BootParameters* BootParameters::GenerateFromFile(std::vector<std::string> paths,
-                                                 BootSessionData boot_session_data_)
-{
-  ASSERT(!paths.empty());
+#ifdef _WIN32
+  for (size_t i = 0; i < paths->text_size; i++)
+  {
+    if (paths->text[i] == '\\')
+      paths->text[i] = '/';
+  }
+#endif
 
-  for (std::string& path : paths)
-    UnifyPathSeparators(path);
+  std::string path = path_list_get(paths, 0);
 
   // Check if the file exist, we may have gotten it from a --elf command line
   // that gave an incorrect file name
-  if (!File::Exists(paths.front()))
+  if (!File::Exists(path))
   {
-    PanicAlert("The specified file \"%s\" does not exist", paths.front().c_str());
+    PanicAlert("The specified file \"%s\" does not exist", path.c_str());
     return {};
   }
 
   std::string extension;
-  SplitPath(paths.front(),
-            nullptr,
-            nullptr, &extension);
+  SplitPath(path, nullptr, nullptr, &extension);
   Common::ToLower(&extension);
 
-  std::string path = paths.front();
-  if (paths.size() == 1)
-    paths.clear();
+  if (paths->count == 1)
+    path_list_clear(paths);
 
   static const char* const disc_image_extensions[] = {".gcm",  ".bin",  ".iso", ".tgc",
                                                       ".wbfs", ".ciso", ".gcz", ".wia",
@@ -229,17 +225,20 @@ BootParameters* BootParameters::GenerateFromFile(std::vector<std::string> paths,
 }
 
 BootParameters::Disc::Disc(std::string path_, DiscIO::VolumeDisc* volume_,
-                           std::vector<std::string> auto_disc_change_paths_)
-    : path(std::move(path_)), volume(volume_),
-      auto_disc_change_paths(std::move(auto_disc_change_paths_))
+                           path_list_t* auto_disc_change_paths_)
+    : path(std::move(path_)), volume(volume_)
 {
+  path_list_init(&auto_disc_change_paths);
+  if (auto_disc_change_paths_)
+    path_list_move(&auto_disc_change_paths, auto_disc_change_paths_);
 }
 
 BootParameters::Disc::Disc(Disc&& other) noexcept
-    : path(std::move(other.path)), volume(other.volume),
-      auto_disc_change_paths(std::move(other.auto_disc_change_paths))
+    : path(std::move(other.path)), volume(other.volume)
 {
   other.volume = nullptr;
+  path_list_init(&auto_disc_change_paths);
+  path_list_move(&auto_disc_change_paths, &other.auto_disc_change_paths);
 }
 
 BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
@@ -250,7 +249,7 @@ BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
     path = std::move(other.path);
     volume = other.volume;
     other.volume = nullptr;
-    auto_disc_change_paths = std::move(other.auto_disc_change_paths);
+    path_list_move(&auto_disc_change_paths, &other.auto_disc_change_paths);
   }
   return *this;
 }
@@ -258,6 +257,7 @@ BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
 BootParameters::Disc::~Disc()
 {
   DiscIO::DestroyVolume(volume);
+  path_list_free(&auto_disc_change_paths);
 }
 
 BootParameters::Executable::Executable(std::string path_, BootExecutableReader* reader_)
@@ -299,11 +299,13 @@ BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_)
 // The returned pointer must only be used while we are still booting,
 // because DVDThread can do whatever it wants to the disc after that.
 // Takes disc.
-static const DiscIO::VolumeDisc*
-SetDisc(DVD::DVDInterface& dvd_interface, DiscIO::VolumeDisc* disc,
-        const std::vector<std::string>& auto_disc_change_paths = {})
+static const DiscIO::VolumeDisc* SetDisc(DVD::DVDInterface& dvd_interface, DiscIO::VolumeDisc* disc,
+                                         const path_list_t* auto_disc_change_paths = nullptr)
 {
-  dvd_interface.SetDisc(disc, &auto_disc_change_paths);
+  // No list means no disc changes, as an empty one does.
+  path_list_t none;
+  path_list_init(&none);
+  dvd_interface.SetDisc(disc, auto_disc_change_paths ? auto_disc_change_paths : &none);
   return disc;
 }
 
@@ -499,7 +501,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
       DiscIO::VolumeDisc* const taken = disc.volume;
       disc.volume = nullptr;
       const DiscIO::VolumeDisc* volume =
-          SetDisc(system.GetDVDInterface(), taken, disc.auto_disc_change_paths);
+          SetDisc(system.GetDVDInterface(), taken, &disc.auto_disc_change_paths);
 
       if (!volume)
         return false;
@@ -605,7 +607,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
       NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc.path.c_str());
       SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc.path),
-              ipl.disc.auto_disc_change_paths);
+              &ipl.disc.auto_disc_change_paths);
 
       SConfig::OnTitleDirectlyBooted();
       return true;

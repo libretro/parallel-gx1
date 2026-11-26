@@ -10,6 +10,7 @@
 
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
+#include "Common/PathList.h"
 
 #include "Core/HW/StreamADPCM.h"
 
@@ -137,11 +138,10 @@ public:
   void RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii);
 
   // takes disc; the auto disc change paths are kept when null
-  void SetDisc(DiscIO::VolumeDisc* disc, const std::vector<std::string>* auto_disc_change_paths);
+  void SetDisc(DiscIO::VolumeDisc* disc, const path_list_t* auto_disc_change_paths);
   bool IsDiscInside() const;
   void EjectDisc(EjectCause cause);
-  void ChangeDisc(const std::vector<std::string>& paths);
-  void ChangeDisc(const std::string& new_path);
+  void ChangeDisc(const char* new_path);
   bool AutoChangeDisc();
 
   // This function returns true and calls SConfig::SetRunningGameMetadata(Volume&, Partition&)
@@ -289,10 +289,10 @@ private:
   u64 m_read_buffer_start_offset = 0;
   u64 m_read_buffer_end_offset = 0;
 
-  // Disc changing
-  std::string m_disc_path_to_insert;
-  std::vector<std::string> m_auto_disc_change_paths;
-  size_t m_auto_disc_change_index = 0;
+  // Disc changing; the path to insert is a list of none or one, keeping its storage
+  path_list_t m_disc_path_to_insert;
+  path_list_t m_auto_disc_change_paths;
+  unsigned m_auto_disc_change_index = 0;
 
   // Events
   CoreTiming::EventType* m_finish_executing_command = nullptr;
