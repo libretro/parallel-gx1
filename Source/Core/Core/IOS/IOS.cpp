@@ -297,7 +297,7 @@ Kernel::Kernel(IOSC::ConsoleType console_type) : m_iosc(console_type)
 
   m_is_responsible_for_nand_root = !Core::WiiRootIsInitialized();
   if (m_is_responsible_for_nand_root)
-    Core::InitializeWiiRoot(false);
+    Core::InitializeWiiRoot();
 
   m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session);
   ASSERT(m_fs);

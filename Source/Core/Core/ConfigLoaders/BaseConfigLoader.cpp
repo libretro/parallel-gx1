@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -80,8 +79,7 @@ void TransferSYSCONFControlFromGuest(WriteBackChangedValues write_back_changed_v
   SaveToSYSCONF(Config::LayerType::Base, SkipIfControlledByGuest::No);
 }
 
-void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
-                   std::function<bool(const Config::Location&)> predicate)
+void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip)
 {
   if (skip == SkipIfControlledByGuest::Yes &&
       retro_atomic_load_acquire_int(&s_sysconf_controlled_by_guest))
@@ -96,9 +94,6 @@ void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
     {
       std::visit(
           [&](auto* info) {
-            if (predicate && !predicate(info->GetLocation()))
-              return;
-
             char key[SysConf::MAX_NAME_LENGTH + 1];
             std::snprintf(key, sizeof(key), "%s.%s", info->GetLocation().section.c_str(),
                           info->GetLocation().key.c_str());

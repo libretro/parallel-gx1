@@ -131,23 +131,12 @@ bool BootCore(Core::System& system, BootParameters* boot)
 
   if (system.IsWii())
   {
-    Core::InitializeWiiRoot(Core::WantsDeterminism());
+    Core::InitializeWiiRoot();
 
     // Ensure any new settings are written to the SYSCONF
-    if (!Core::WantsDeterminism())
-    {
-      Core::BackupWiiSettings();
-      ConfigLoaders::SaveToSYSCONF(Config::LayerType::Meta,
-                                   ConfigLoaders::SkipIfControlledByGuest::No);
-    }
-    else
-    {
-      ConfigLoaders::SaveToSYSCONF(
-          Config::LayerType::Meta, ConfigLoaders::SkipIfControlledByGuest::No,
-          [](const Config::Location& location) {
-            return Config::GetActiveLayerForConfig(location) >= Config::LayerType::Movie;
-          });
-    }
+    Core::BackupWiiSettings();
+    ConfigLoaders::SaveToSYSCONF(Config::LayerType::Meta,
+                                 ConfigLoaders::SkipIfControlledByGuest::No);
   }
 
 
@@ -214,15 +203,8 @@ void RestoreConfig()
 {
   Core::ShutdownWiiRoot();
 
-  if (Core::WiiRootIsTemporary())
-  {
-    ConfigLoaders::TransferSYSCONFControlFromGuest(ConfigLoaders::WriteBackChangedValues::No);
-  }
-  else
-  {
-    Core::RestoreWiiSettings(Core::RestoreReason::EmulationEnd);
-    ConfigLoaders::TransferSYSCONFControlFromGuest(ConfigLoaders::WriteBackChangedValues::Yes);
-  }
+  Core::RestoreWiiSettings(Core::RestoreReason::EmulationEnd);
+  ConfigLoaders::TransferSYSCONFControlFromGuest(ConfigLoaders::WriteBackChangedValues::Yes);
 
   Config::ClearCurrentRunLayer();
   Config::RemoveLayer(Config::LayerType::Movie);

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 
 namespace Config
@@ -29,8 +28,7 @@ enum class SkipIfControlledByGuest
 
 void TransferSYSCONFControlToGuest();
 void TransferSYSCONFControlFromGuest(WriteBackChangedValues write_back_changed_values);
-void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
-                   std::function<bool(const Config::Location&)> predicate = {});
+void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip);
 // The caller's, handed on to Config::AddLayer
 Config::ConfigLayerLoader* GenerateBaseConfigLoader();
 }  // namespace ConfigLoaders

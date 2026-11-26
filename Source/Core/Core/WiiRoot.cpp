@@ -3,7 +3,6 @@
 
 #include "Core/WiiRoot.h"
 
-#include <cinttypes>
 #include <string>
 #include <vector>
 
@@ -19,19 +18,16 @@
 #include "Core/Boot/Boot.h"
 #include "Core/CommonTitles.h"
 #include "Core/ConfigManager.h"
-#include "Core/HW/WiiSave.h"
 #include "Core/IOS/ES/ES.h"
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/Uids.h"
-#include "Core/SysConf.h"
 #include "Core/System.h"
 
 namespace Core
 {
 namespace FS = IOS::HLE::FS;
 
-static std::string s_temp_wii_root;
 static bool s_wii_root_initialized = false;
 
 static bool CopyBackupFile(const std::string& path_from, const std::string& path_to)
@@ -68,94 +64,21 @@ static void RestoreFile(const std::string& path_in_nand)
     DeleteBackupFile(file_name);
 }
 
-static bool CopyNandFile(FS::FileSystem* source_fs, const std::string& source_file,
-                         FS::FileSystem* dest_fs, const std::string& dest_file)
-{
-  auto source_handle = source_fs->OpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file.c_str(),
-                                           IOS::HLE::FS::Mode::Read);
-  // If the source file doesn't exist, there is nothing more to do.
-  // This function must not create an empty file on the destination filesystem.
-  if (!source_handle)
-    return true;
-
-  dest_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, dest_file.c_str(), 0,
-                          {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
-
-  auto dest_handle =
-      dest_fs->CreateAndOpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file.c_str(),
-                                 {IOS::HLE::FS::Mode::ReadWrite, IOS::HLE::FS::Mode::ReadWrite,
-                                  IOS::HLE::FS::Mode::ReadWrite});
-  if (!dest_handle)
-    return false;
-
-  std::vector<u8> buffer(source_handle->GetStatus()->size);
-  if (!source_handle->Read(buffer.data(), buffer.size()))
-    return false;
-  if (!dest_handle->Write(buffer.data(), buffer.size()))
-    return false;
-
-  return true;
-}
-
-static void MoveToBackupIfExists(const std::string& path)
-{
-  if (File::Exists(path))
-  {
-    const std::string backup_path = path.substr(0, path.size() - 1) + ".backup";
-    WARN_LOG(IOS_FS, "Temporary directory at %s exists, moving to backup...", path.c_str());
-
-    // If backup exists, delete it as we don't want a mess
-    if (File::Exists(backup_path))
-    {
-      WARN_LOG(IOS_FS, "Temporary backup directory at %s exists, deleting...", backup_path.c_str());
-      File::DeleteDirRecursively(backup_path);
-    }
-
-    File::MoveWithOverwrite(path, backup_path);
-  }
-}
-
-void InitializeWiiRoot(bool use_temporary)
+void InitializeWiiRoot()
 {
   ASSERT(!s_wii_root_initialized);
-
-  if (use_temporary)
-  {
-    s_temp_wii_root = File::GetUserPath(D_USER_IDX) + "WiiSession" DIR_SEP;
-    WARN_LOG(IOS_FS, "Using temporary directory %s for minimal Wii FS", s_temp_wii_root.c_str());
-
-    // If directory exists, make a backup
-    MoveToBackupIfExists(s_temp_wii_root);
-
-    File::SetUserPath(D_SESSION_WIIROOT_IDX, s_temp_wii_root);
-  }
-  else
-  {
-    File::SetUserPath(D_SESSION_WIIROOT_IDX, File::GetUserPath(D_WIIROOT_IDX));
-  }
-
+  File::SetUserPath(D_SESSION_WIIROOT_IDX, File::GetUserPath(D_WIIROOT_IDX));
   s_wii_root_initialized = true;
 }
 
 void ShutdownWiiRoot()
 {
-  if (WiiRootIsTemporary())
-  {
-    File::DeleteDirRecursively(s_temp_wii_root);
-    s_temp_wii_root.clear();
-  }
-
   s_wii_root_initialized = false;
 }
 
 bool WiiRootIsInitialized()
 {
   return s_wii_root_initialized;
-}
-
-bool WiiRootIsTemporary()
-{
-  return !s_temp_wii_root.empty();
 }
 
 void BackupWiiSettings()
@@ -245,80 +168,6 @@ void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data)
   // to the NAND manually.
   if (!CopySysmenuFilesToFS(fs, File::GetSysDirectory() + WII_USER_DIR, ""))
     WARN_LOG(CORE, "Failed to copy initial System Menu files to the NAND");
-
-  if (WiiRootIsTemporary())
-  {
-    // Generate a SYSCONF with default settings for the temporary Wii NAND.
-    SysConf sysconf{fs};
-    sysconf.Save();
-  }
 }
 
-struct SaveCopyContext
-{
-  IOS::HLE::EmulationKernel* ios;
-  FS::FileSystem* configured_fs;
-};
-
-// Copies one title's save from the session NAND back to the configured one, backing it up first
-static bool CopySaveBack(u64 title_id, void* context)
-{
-  IOS::HLE::EmulationKernel* const ios = static_cast<SaveCopyContext*>(context)->ios;
-  FS::FileSystem* const configured_fs = static_cast<SaveCopyContext*>(context)->configured_fs;
-
-  INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
-
-  WiiSave::Storage* const session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
-
-  // FS won't write the save if the directory doesn't exist
-  char title_path[Common::NAND_PATH_SIZE];
-  char title_path_slash[Common::NAND_PATH_SIZE + 1];
-  Common::GetTitleDataPath(title_id, title_path, sizeof(title_path));
-  std::snprintf(title_path_slash, sizeof(title_path_slash), "%s/", title_path);
-  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path_slash, 0,
-                                {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
-
-  WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);
-
-  const std::string backup_path = StringFromFormat(
-      "%s/%016" PRIx64 ".bin", File::GetUserPath(D_BACKUP_IDX).c_str(), (u64)title_id);
-  WiiSave::Storage* const backup_save =
-      WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
-
-  // Backup the existing save just in case it's still needed.
-  WiiSave::Copy(user_save, backup_save);
-  WiiSave::Copy(session_save, user_save);
-  WiiSave::FreeStorage(backup_save);
-  WiiSave::FreeStorage(user_save);
-  WiiSave::FreeStorage(session_save);
-  return true;
-}
-
-void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
-{
-  // In TAS mode, copy back always.
-  const bool cleanup_required = WiiRootIsTemporary();
-
-  INFO_LOG(CORE, "Wii FS Cleanup: cleanup_required = %s", cleanup_required ? "true" : "false");
-
-  if (!cleanup_required)
-    return;
-
-  INFO_LOG(CORE, "Wii FS Cleanup: Copying from temporary FS to configured_fs.");
-
-  IOS::HLE::EmulationKernel* ios = Core::System::GetInstance().GetIOS();
-
-  FS::FileSystem* const configured_fs = FS::MakeFileSystem(FS::Location::Configured);
-
-  // Copy back Mii data
-  if (!CopyNandFile(ios->GetFS(), Common::MII_DATABASE_PATH, configured_fs,
-                    Common::MII_DATABASE_PATH))
-  {
-    WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
-  }
-
-  SaveCopyContext save_copy = {ios, configured_fs};
-  ios->GetESCore().ForEachInstalledTitle(CopySaveBack, &save_copy);
-  delete configured_fs;
-}
 }  // namespace Core

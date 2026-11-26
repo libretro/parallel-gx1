@@ -89,7 +89,6 @@ struct EmuThreadStages
   bool sd_sync;   // the Wii SD card image is synced back to its folder
   bool hw;        // the hardware is shut down
   bool gpu_loop;  // dual core: the GPU loop is told to stop
-  bool wii_fs;    // the Wii filesystem is cleaned up
 };
 static EmuThreadStages s_emu_thread_stages; /* single core, until Shutdown */
 BootParameters* g_boot_params;
@@ -357,8 +356,6 @@ static bool InitializeVideoThreads(Core::System& system)
 static void EmuThreadTeardown(EmuThreadStages* stages)
 {
   Core::System& system = *stages->system;
-  if (stages->wii_fs)
-    Core::CleanUpWiiFileSystemContents(BootSessionData());
   if (stages->gpu_loop)
   {
     INFO_LOG(CONSOLE, "%s", StopMessage(true, "Wait for Video Loop to exit ...").c_str());
@@ -535,10 +532,7 @@ void EmuThread(Core::System& system, BootParameters* boot)
   // This is done here after Boot and not in BootManager to ensure that we operate
   // with the correct title context since save copying requires title directories to exist.
   if (system.IsWii())
-  {
     Core::InitializeWiiFileSystemContents(boot_session_data);
-    emu.stages.wii_fs = true;
-  }
 
   // This adds the SyncGPU handler to CoreTiming, so now CoreTiming::Advance might block.
   system.GetFifo().Prepare();

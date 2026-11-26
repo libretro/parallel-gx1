@@ -778,7 +778,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/Speaker.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/WiimoteEmu.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteReal/WiimoteReal.cpp \
-	$(CORE_DIR)/Source/Core/Core/HW/WiiSave.cpp \
 	$(CORE_DIR)/Source/Core/Core/IOS/Device.cpp \
 	$(CORE_DIR)/Source/Core/Core/IOS/DeviceStub.cpp \
 	$(CORE_DIR)/Source/Core/Core/IOS/Crypto/AesDevice.cpp \

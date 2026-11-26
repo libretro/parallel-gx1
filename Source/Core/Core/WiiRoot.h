@@ -13,17 +13,15 @@ enum class RestoreReason
   CrashRecovery,
 };
 
-void InitializeWiiRoot(bool use_temporary);
+void InitializeWiiRoot();
 void ShutdownWiiRoot();
 
 bool WiiRootIsInitialized();
-bool WiiRootIsTemporary();
 
 void BackupWiiSettings();
 void RestoreWiiSettings(RestoreReason reason);
 
-// Initialize or clean up the filesystem contents.
+// Initialize the filesystem contents.
 void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data);
-void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data);
 
 }  // namespace Core
