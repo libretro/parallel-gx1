@@ -137,6 +137,120 @@ BootParameters::BootParameters(Parameters&& parameters_, BootSessionData boot_se
 {
 }
 
+// A copy of path on the heap, freed with free(); nullptr when out of memory
+static char* CopyPath(const char* path)
+{
+  const size_t size = std::strlen(path) + 1;
+  char* const copy = static_cast<char*>(std::malloc(size));
+  if (copy)
+    std::memcpy(copy, path, size);
+  return copy;
+}
+
+// The parameters for the file at path, which is the first of paths
+static BootParameters* GenerateFromPath(const char* path, path_list_t* paths,
+                                        BootSessionData&& boot_session_data_)
+{
+  using Disc = BootParameters::Disc;
+  using Executable = BootParameters::Executable;
+  using DFF = BootParameters::DFF;
+
+  // Check if the file exist, we may have gotten it from a --elf command line
+  // that gave an incorrect file name
+  if (!File::Exists(path))
+  {
+    PanicAlert("The specified file \"%s\" does not exist", path);
+    return nullptr;
+  }
+
+  // The extension, lowercased, from the last '.' in the file name; empty when it has none, or
+  // one longer than any known
+  char extension[8] = "";
+  {
+    const char* name = path;
+    const char* dot = nullptr;
+    const char* c;
+    for (c = path; *c; c++)
+    {
+      if (*c == '/'
+#ifdef _WIN32
+          || *c == ':'
+#endif
+      )
+      {
+        name = c + 1;
+      }
+    }
+    for (c = name; *c; c++)
+    {
+      if (*c == '.')
+        dot = c;
+    }
+    if (dot && std::strlen(dot) < sizeof(extension))
+    {
+      size_t i;
+      for (i = 0; dot[i]; i++)
+        extension[i] = (dot[i] >= 'A' && dot[i] <= 'Z') ? dot[i] + ('a' - 'A') : dot[i];
+      extension[i] = '\0';
+    }
+  }
+
+  if (paths->count == 1)
+    path_list_clear(paths);
+
+  static const char* const disc_image_extensions[] = {".gcm",  ".bin",  ".iso", ".tgc",
+                                                      ".wbfs", ".ciso", ".gcz", ".wia",
+                                                      ".rvz",  ".nfs",  ".dol", ".elf"};
+  bool is_disc_image = false;
+  for (size_t i = 0; i < sizeof(disc_image_extensions) / sizeof(disc_image_extensions[0]); i++)
+  {
+    if (!std::strcmp(extension, disc_image_extensions[i]))
+    {
+      is_disc_image = true;
+      break;
+    }
+  }
+  if (is_disc_image)
+  {
+    DiscIO::VolumeDisc* disc = DiscIO::CreateDiscForCore(path);
+    if (disc)
+      return new BootParameters(Disc{path, disc, paths}, std::move(boot_session_data_));
+
+    if (!std::strcmp(extension, ".elf"))
+    {
+      ElfReader* elf_reader = new ElfReader(path);
+      return new BootParameters(Executable{path, elf_reader}, std::move(boot_session_data_));
+    }
+
+    if (!std::strcmp(extension, ".dol"))
+    {
+      DolReader* dol_reader = new DolReader(path);
+      return new BootParameters(Executable{path, dol_reader}, std::move(boot_session_data_));
+    }
+
+    PanicAlert("\"%s\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.", path);
+    return nullptr;
+  }
+
+  if (!std::strcmp(extension, ".dff"))
+    return new BootParameters(DFF{path}, std::move(boot_session_data_));
+
+  if (!std::strcmp(extension, ".wad"))
+  {
+    DiscIO::VolumeWAD* wad = DiscIO::CreateWAD(path);
+    if (wad)
+    {
+      // the WAD moves into the parameters, its reader with it; what is left of it goes
+      auto parameters = new BootParameters(std::move(*wad), std::move(boot_session_data_));
+      DiscIO::DestroyVolume(wad);
+      return parameters;
+    }
+  }
+
+  PanicAlert("Could not recognize file %s", path);
+  return nullptr;
+}
+
 BootParameters* BootParameters::GenerateFromFile(path_list_t* paths,
                                                  BootSessionData boot_session_data_)
 {
@@ -150,92 +264,27 @@ BootParameters* BootParameters::GenerateFromFile(path_list_t* paths,
   }
 #endif
 
-  std::string path = path_list_get(paths, 0);
-
-  // Check if the file exist, we may have gotten it from a --elf command line
-  // that gave an incorrect file name
-  if (!File::Exists(path))
-  {
-    PanicAlert("The specified file \"%s\" does not exist", path.c_str());
-    return {};
-  }
-
-  std::string extension;
-  SplitPath(path, nullptr, nullptr, &extension);
-  Common::ToLower(&extension);
-
-  if (paths->count == 1)
-    path_list_clear(paths);
-
-  static const char* const disc_image_extensions[] = {".gcm",  ".bin",  ".iso", ".tgc",
-                                                      ".wbfs", ".ciso", ".gcz", ".wia",
-                                                      ".rvz",  ".nfs",  ".dol", ".elf"};
-  bool is_disc_image = false;
-  for (size_t i = 0; i < sizeof(disc_image_extensions) / sizeof(disc_image_extensions[0]); i++)
-  {
-    if (!std::strcmp(extension.c_str(), disc_image_extensions[i]))
-    {
-      is_disc_image = true;
-      break;
-    }
-  }
-  if (is_disc_image)
-  {
-    DiscIO::VolumeDisc* disc = DiscIO::CreateDiscForCore(path);
-    if (disc)
-    {
-      return new BootParameters(Disc{std::move(path), disc, paths}, std::move(boot_session_data_));
-    }
-
-    if (extension == ".elf")
-    {
-      ElfReader* elf_reader = new ElfReader(path);
-      return new BootParameters(Executable{std::move(path), elf_reader},
-                                std::move(boot_session_data_));
-    }
-
-    if (extension == ".dol")
-    {
-      DolReader* dol_reader = new DolReader(path);
-      return new BootParameters(Executable{std::move(path), dol_reader},
-                                std::move(boot_session_data_));
-    }
-
-    PanicAlert("\"%s\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.", path.c_str());
-    return {};
-  }
-
-  if (extension == ".dff")
-    return new BootParameters(DFF{std::move(path)}, std::move(boot_session_data_));
-
-  if (extension == ".wad")
-  {
-    DiscIO::VolumeWAD* wad = DiscIO::CreateWAD(path);
-    if (wad)
-    {
-      // the WAD moves into the parameters, its reader with it; what is left of it goes
-      auto parameters = new BootParameters(std::move(*wad), std::move(boot_session_data_));
-      DiscIO::DestroyVolume(wad);
-      return parameters;
-    }
-  }
-
-  PanicAlert("Could not recognize file %s", path.c_str());
-  return nullptr;
+  // copied, as the paths can move into the parameters
+  char* const path = CopyPath(path_list_get(paths, 0));
+  if (!path)
+    return nullptr;
+  BootParameters* const parameters = GenerateFromPath(path, paths, std::move(boot_session_data_));
+  std::free(path);
+  return parameters;
 }
 
-BootParameters::Disc::Disc(std::string path_, DiscIO::VolumeDisc* volume_,
+BootParameters::Disc::Disc(const char* path_, DiscIO::VolumeDisc* volume_,
                            path_list_t* auto_disc_change_paths_)
-    : path(std::move(path_)), volume(volume_)
+    : path(CopyPath(path_)), volume(volume_)
 {
   path_list_init(&auto_disc_change_paths);
   if (auto_disc_change_paths_)
     path_list_move(&auto_disc_change_paths, auto_disc_change_paths_);
 }
 
-BootParameters::Disc::Disc(Disc&& other) noexcept
-    : path(std::move(other.path)), volume(other.volume)
+BootParameters::Disc::Disc(Disc&& other) noexcept : path(other.path), volume(other.volume)
 {
+  other.path = nullptr;
   other.volume = nullptr;
   path_list_init(&auto_disc_change_paths);
   path_list_move(&auto_disc_change_paths, &other.auto_disc_change_paths);
@@ -246,7 +295,9 @@ BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
   if (this != &other)
   {
     DiscIO::DestroyVolume(volume);
-    path = std::move(other.path);
+    std::free(path);
+    path = other.path;
+    other.path = nullptr;
     volume = other.volume;
     other.volume = nullptr;
     path_list_move(&auto_disc_change_paths, &other.auto_disc_change_paths);
@@ -257,17 +308,19 @@ BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
 BootParameters::Disc::~Disc()
 {
   DiscIO::DestroyVolume(volume);
+  std::free(path);
   path_list_free(&auto_disc_change_paths);
 }
 
-BootParameters::Executable::Executable(std::string path_, BootExecutableReader* reader_)
-    : path(std::move(path_)), reader(reader_)
+BootParameters::Executable::Executable(const char* path_, BootExecutableReader* reader_)
+    : path(CopyPath(path_)), reader(reader_)
 {
 }
 
 BootParameters::Executable::Executable(Executable&& other) noexcept
-    : path(std::move(other.path)), reader(other.reader)
+    : path(other.path), reader(other.reader)
 {
+  other.path = nullptr;
   other.reader = nullptr;
 }
 
@@ -276,7 +329,9 @@ BootParameters::Executable& BootParameters::Executable::operator=(Executable&& o
   if (this != &other)
   {
     DestroyBootExecutableReader(reader);
-    path = std::move(other.path);
+    std::free(path);
+    path = other.path;
+    other.path = nullptr;
     reader = other.reader;
     other.reader = nullptr;
   }
@@ -286,13 +341,63 @@ BootParameters::Executable& BootParameters::Executable::operator=(Executable&& o
 BootParameters::Executable::~Executable()
 {
   DestroyBootExecutableReader(reader);
+  std::free(path);
 }
 
 BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_)
     : region(region_), disc(std::move(disc_))
 {
   const std::string directory = Config::GetDirectoryForRegion(region);
-  path = Config::GetBootROMPath(directory);
+  path = CopyPath(Config::GetBootROMPath(directory).c_str());
+}
+
+BootParameters::IPL::IPL(IPL&& other) noexcept
+    : path(other.path), region(other.region), disc(std::move(other.disc))
+{
+  other.path = nullptr;
+}
+
+BootParameters::IPL& BootParameters::IPL::operator=(IPL&& other) noexcept
+{
+  if (this != &other)
+  {
+    std::free(path);
+    path = other.path;
+    other.path = nullptr;
+    region = other.region;
+    disc = std::move(other.disc);
+  }
+  return *this;
+}
+
+BootParameters::IPL::~IPL()
+{
+  std::free(path);
+}
+
+BootParameters::DFF::DFF(const char* dff_path_) : dff_path(CopyPath(dff_path_))
+{
+}
+
+BootParameters::DFF::DFF(DFF&& other) noexcept : dff_path(other.dff_path)
+{
+  other.dff_path = nullptr;
+}
+
+BootParameters::DFF& BootParameters::DFF::operator=(DFF&& other) noexcept
+{
+  if (this != &other)
+  {
+    std::free(dff_path);
+    dff_path = other.dff_path;
+    other.dff_path = nullptr;
+  }
+  return *this;
+}
+
+BootParameters::DFF::~DFF()
+{
+  std::free(dff_path);
 }
 
 // Inserts a disc into the emulated disc drive and returns a pointer to it.
@@ -497,7 +602,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
     BootTitle(Core::System& system_) : system(system_), config(SConfig::GetInstance()) {}
     bool operator()(BootParameters::Disc& disc) const
     {
-      NOTICE_LOG(BOOT, "Booting from disc: %s", disc.path.c_str());
+      NOTICE_LOG(BOOT, "Booting from disc: %s", disc.path);
       DiscIO::VolumeDisc* const taken = disc.volume;
       disc.volume = nullptr;
       const DiscIO::VolumeDisc* volume =
@@ -515,7 +620,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
     bool operator()(const BootParameters::Executable& executable) const
     {
-      NOTICE_LOG(BOOT, "Booting from executable: %s", executable.path.c_str());
+      NOTICE_LOG(BOOT, "Booting from executable: %s", executable.path);
 
       if (!executable.reader->IsValid())
         return false;
@@ -562,7 +667,19 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
       ppc_state.pc = executable.reader->GetEntryPoint();
 
-      const std::string filename = PathToFileName(executable.path);
+      // the file name without its directories
+      const char* filename = executable.path;
+      for (const char* c = executable.path; *c; c++)
+      {
+        if (*c == '/'
+#ifdef _WIN32
+            || *c == ':'
+#endif
+        )
+        {
+          filename = c + 1;
+        }
+      }
 
       auto& ppc_symbol_db = system.GetPPCSymbolDB();
       ppc_symbol_db.Clear();
@@ -595,7 +712,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
     bool operator()(const BootParameters::IPL& ipl) const
     {
-      NOTICE_LOG(BOOT, "Booting GC IPL: %s", ipl.path.c_str());
+      NOTICE_LOG(BOOT, "Booting GC IPL: %s", ipl.path);
       if (!File::Exists(ipl.path))
       {
         PanicAlert("Cannot start the game, because the GC IPL could not be found.");
@@ -605,7 +722,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
       if (!Load_BS2(system, ipl.path))
         return false;
 
-      NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc.path.c_str());
+      NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc.path);
       SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc.path),
               &ipl.disc.auto_disc_change_paths);
 
@@ -615,7 +732,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
     bool operator()(const BootParameters::DFF& dff) const
     {
-      NOTICE_LOG(BOOT, "Booting DFF: %s", dff.dff_path.c_str());
+      NOTICE_LOG(BOOT, "Booting DFF: %s", dff.dff_path);
       return system.GetFifoPlayer().Open(dff.dff_path);
     }
 
@@ -629,7 +746,7 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
   return booted;
 }
 
-BootExecutableReader::BootExecutableReader(BootExecutableKind kind, const std::string& file_name)
+BootExecutableReader::BootExecutableReader(BootExecutableKind kind, const char* file_name)
     : executable_kind(kind), m_file(file_name, "rb")
 {
   u64 size = 0;
@@ -693,8 +810,7 @@ bool BootExecutableReader::LoadIntoMemory(Core::System& system, bool only_in_mem
 }
 
 // A DOL carries no symbols
-bool BootExecutableReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db,
-                                       const std::string& filename) const
+bool BootExecutableReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const
 {
   if (executable_kind == BootExecutableKind::Elf)
     return static_cast<const ElfReader*>(this)->LoadSymbols(ppc_symbol_db, filename);

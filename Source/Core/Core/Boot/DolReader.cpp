@@ -18,8 +18,7 @@
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
-DolReader::DolReader(const std::string& filename)
-    : BootExecutableReader(BootExecutableKind::Dol, filename)
+DolReader::DolReader(const char* filename) : BootExecutableReader(BootExecutableKind::Dol, filename)
 {
   m_is_valid = Initialize();
 }

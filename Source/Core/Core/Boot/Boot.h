@@ -59,7 +59,7 @@ struct BootParameters
   {
     Disc() = default;
     // takes volume, and moves the paths out of auto_disc_change_paths_ when it is not null
-    Disc(std::string path_, DiscIO::VolumeDisc* volume_,
+    Disc(const char* path_, DiscIO::VolumeDisc* volume_,
          path_list_t* auto_disc_change_paths_ = nullptr);
     // the volume goes with it
     Disc(Disc&& other) noexcept;
@@ -68,7 +68,7 @@ struct BootParameters
     Disc& operator=(const Disc&) = delete;
     ~Disc();
 
-    std::string path;
+    char* path = nullptr;                  // owned
     DiscIO::VolumeDisc* volume = nullptr;  // owned
     path_list_t auto_disc_change_paths = {};
   };
@@ -77,7 +77,7 @@ struct BootParameters
   {
     Executable() = default;
     // takes reader
-    Executable(std::string path_, BootExecutableReader* reader_);
+    Executable(const char* path_, BootExecutableReader* reader_);
     // the reader goes with it
     Executable(Executable&& other) noexcept;
     Executable& operator=(Executable&& other) noexcept;
@@ -85,7 +85,7 @@ struct BootParameters
     Executable& operator=(const Executable&) = delete;
     ~Executable();
 
-    std::string path;
+    char* path = nullptr;                    // owned
     BootExecutableReader* reader = nullptr;  // owned
   };
 
@@ -98,14 +98,27 @@ struct BootParameters
   {
     // the IPL boots with the disc inserted ("skip IPL" disabled)
     IPL(DiscIO::Region region_, Disc&& disc_);
-    std::string path;
+    IPL(IPL&& other) noexcept;
+    IPL& operator=(IPL&& other) noexcept;
+    IPL(const IPL&) = delete;
+    IPL& operator=(const IPL&) = delete;
+    ~IPL();
+
+    char* path = nullptr;  // owned
     DiscIO::Region region;
     Disc disc;
   };
 
   struct DFF
   {
-    std::string dff_path;
+    explicit DFF(const char* dff_path_);
+    DFF(DFF&& other) noexcept;
+    DFF& operator=(DFF&& other) noexcept;
+    DFF(const DFF&) = delete;
+    DFF& operator=(const DFF&) = delete;
+    ~DFF();
+
+    char* dff_path = nullptr;  // owned
   };
 
   // The caller's, freed with delete; nullptr when the file is not recognized. The first path is
@@ -166,13 +179,13 @@ public:
   bool IsValid() const;
   bool IsWii() const;
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
-  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const std::string& filename) const;
+  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const;
 
   const BootExecutableKind executable_kind;
 
 protected:
   // The executable lent from the file's mapping where it has one, else read into memory.
-  BootExecutableReader(BootExecutableKind kind, const std::string& file_name);
+  BootExecutableReader(BootExecutableKind kind, const char* file_name);
   // The executable at data, lent by the caller, who keeps it alive and lets the reader
   // rewrite it in place; freed with free() by the reader when take_ownership.
   BootExecutableReader(BootExecutableKind kind, u8* data, size_t size, bool take_ownership);

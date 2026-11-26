@@ -69,8 +69,7 @@ static void byteswapSection(Elf32_Shdr& sec)
   bswap(sec.sh_type);
 }
 
-ElfReader::ElfReader(const std::string& filename)
-    : BootExecutableReader(BootExecutableKind::Elf, filename)
+ElfReader::ElfReader(const char* filename) : BootExecutableReader(BootExecutableKind::Elf, filename)
 {
   m_is_valid = Initialize();
 }
@@ -239,7 +238,7 @@ SectionID ElfReader::GetSectionByName(const char* name, int firstSection) const
   return -1;
 }
 
-bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const std::string& filename) const
+bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const
 {
   if (!m_is_valid)
     return false;

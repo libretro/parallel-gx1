@@ -25,7 +25,7 @@ typedef int SectionID;
 class ElfReader final : public BootExecutableReader
 {
 public:
-  explicit ElfReader(const std::string& filename);
+  explicit ElfReader(const char* filename);
   ElfReader(u8* data, size_t size, bool take_ownership);
   ~ElfReader();
   u32 Read32(int off) const { return base32[off >> 2]; }
@@ -35,7 +35,7 @@ public:
   u32 GetEntryPoint() const { return entryPoint; }
   u32 GetFlags() const { return (u32)(header->e_flags); }
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
-  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const std::string& filename) const;
+  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const;
   bool IsValid() const { return m_is_valid; }
   bool IsWii() const;
 

@@ -11,7 +11,7 @@
 class DolReader final : public BootExecutableReader
 {
 public:
-  explicit DolReader(const std::string& filename);
+  explicit DolReader(const char* filename);
   DolReader(u8* data, size_t size, bool take_ownership);
   ~DolReader();
 
