@@ -670,6 +670,14 @@ const u8* SharedContentMap::GetHash(size_t index) const
   return m_entries[index].sha1;
 }
 
+// Writes /shared1/<id>.app; false when it does not fit.
+static bool FormatSharedContentPath(const u8* id, size_t id_size, char* out, size_t out_size)
+{
+  const int length = snprintf(out, out_size, "/shared1/%.*s.app", static_cast<int>(id_size),
+                              reinterpret_cast<const char*>(id));
+  return length >= 0 && static_cast<size_t>(length) < out_size;
+}
+
 bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* out,
                                     size_t out_size, u64* ticks)
 {
@@ -692,41 +700,30 @@ bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* 
   if (!has_found)
     return false;
 
-  const int length =
-      snprintf(out, out_size, "/shared1/%.*s.app", static_cast<int>(sizeof(found.id)),
-               reinterpret_cast<const char*>(found.id));
-  return length >= 0 && static_cast<size_t>(length) < out_size;
+  return FormatSharedContentPath(found.id, sizeof(found.id), out, out_size);
 }
 
-bool SharedContentMap::GetFilenameFromSHA1(const u8* sha1, std::string* filename) const
+bool SharedContentMap::GetFilenameFromSHA1(const u8* sha1, char* out, size_t out_size) const
 {
-  const Entry* it = nullptr;
   for (size_t i = 0; i < m_entry_count; i++)
   {
     if (std::memcmp(m_entries[i].sha1, sha1, sizeof(m_entries[i].sha1)) == 0)
-    {
-      it = &m_entries[i];
-      break;
-    }
+      return FormatSharedContentPath(m_entries[i].id, sizeof(m_entries[i].id), out, out_size);
   }
-  if (!it)
-    return false;
-
-  const std::string_view id_string(reinterpret_cast<const char*>(it->id), sizeof(it->id));
-  *filename =
-      StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()), id_string.data());
-  return true;
+  return false;
 }
 
-std::string SharedContentMap::AddSharedContent(const u8* sha1)
+bool SharedContentMap::AddSharedContent(const u8* sha1, char* out, size_t out_size)
 {
-  std::string filename;
-  if (GetFilenameFromSHA1(sha1, &filename))
-    return filename;
+  for (size_t i = 0; i < m_entry_count; i++)
+  {
+    if (std::memcmp(m_entries[i].sha1, sha1, sizeof(m_entries[i].sha1)) == 0)
+      return FormatSharedContentPath(m_entries[i].id, sizeof(m_entries[i].id), out, out_size);
+  }
 
   Entry* const added = AddEntry();
   if (!added)
-    return {};
+    return false;
   Entry& entry = *added;
   static_assert(sizeof(m_last_id) == 4,
                 "'m_last_id' must be represented by 8 characters when formatted in hexadecimal.");
@@ -739,10 +736,7 @@ std::string SharedContentMap::AddSharedContent(const u8* sha1)
 
   WriteEntries();
   m_last_id++;
-
-  const std::string_view id_string(reinterpret_cast<const char*>(entry.id), sizeof(entry.id));
-  return StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()),
-                          id_string.data());
+  return FormatSharedContentPath(entry.id, sizeof(entry.id), out, out_size);
 }
 
 bool SharedContentMap::DeleteSharedContent(const u8* sha1)

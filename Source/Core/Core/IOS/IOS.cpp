@@ -435,10 +435,10 @@ u16 EmulationKernel::GetGidForPPC() const
 
 // The file, in memory from malloc() for the caller to free; nullptr when it cannot be read or
 // is larger than a nonzero max_size.
-static u8* ReadBootContent(FSCore& fs, const std::string& path, size_t max_size, size_t* size,
+static u8* ReadBootContent(FSCore& fs, const char* path, size_t max_size, size_t* size,
                            Ticks ticks = {})
 {
-  const auto fd = fs.Open(0, 0, path.c_str(), FS::Mode::Read, ticks);
+  const auto fd = fs.Open(0, 0, path, FS::Mode::Read, ticks);
   u8* buffer;
   if (fd.Get() < 0)
     return nullptr;
@@ -461,7 +461,7 @@ static u8* ReadBootContent(FSCore& fs, const std::string& path, size_t max_size,
 
 // This corresponds to syscall 0x41, which loads a binary from the NAND and bootstraps the PPC.
 // Unlike 0x42, IOS will set up some constants in memory before booting the PPC.
-bool EmulationKernel::BootstrapPPC(const std::string& boot_content_path)
+bool EmulationKernel::BootstrapPPC(const char* boot_content_path)
 {
   // Seeking and processing overhead is ignored as most time is spent reading from the NAND.
   u64 ticks = 0;
@@ -485,7 +485,7 @@ bool EmulationKernel::BootstrapPPC(const std::string& boot_content_path)
   if (!dol.LoadIntoMemory(m_system))
     return false;
 
-  INFO_LOG(IOS, "BootstrapPPC: %s", boot_content_path.c_str());
+  INFO_LOG(IOS, "BootstrapPPC: %s", boot_content_path);
   m_system.GetCoreTiming().ScheduleEvent(ticks, s_event_finish_ppc_bootstrap, dol.IsAncast());
   return true;
 }
@@ -541,13 +541,13 @@ static constexpr SystemTimers::TimeBaseTick GetIOSBootTicks(u32 version)
 // to be installed at the moment. If one is passed, the boot binary must exist
 // on the NAND, or the call will fail like on a Wii.
 bool EmulationKernel::BootIOS(const u64 ios_title_id, HangPPC hang_ppc,
-                              const std::string& boot_content_path)
+                              const char* boot_content_path)
 {
   // IOS suspends regular PPC<->ARM IPC before loading a new IOS.
   // IPC is not resumed if the boot fails for any reason.
   m_ipc_paused = true;
 
-  if (!boot_content_path.empty())
+  if (boot_content_path[0])
   {
     // Load the ARM binary to memory (if possible).
     // Because we do not actually emulate the Starlet, only load the sections that are in MEM1.

@@ -379,9 +379,17 @@ bool ESDevice::LaunchIOS(u64 ios_title_id, HangPPC hang_ppc)
     const ES::TMDReader tmd = m_core.FindInstalledTMD(ios_title_id);
     const ES::TicketReader ticket = m_core.FindSignedTicket(ios_title_id);
     ES::Content content;
-    if (!tmd.IsValid() || !ticket.IsValid() || !tmd.GetContent(tmd.GetBootIndex(), &content) ||
-        !GetEmulationKernel().BootIOS(ios_title_id, hang_ppc,
-                                      m_core.GetContentPath(ios_title_id, content)))
+    char content_path[Common::NAND_PATH_SIZE];
+    bool launched =
+        tmd.IsValid() && ticket.IsValid() && tmd.GetContent(tmd.GetBootIndex(), &content);
+    if (launched)
+    {
+      // A shared content missing from the map boots without a binary, as it always did.
+      if (!m_core.GetContentPath(ios_title_id, content, content_path, sizeof(content_path)))
+        content_path[0] = '\0';
+      launched = GetEmulationKernel().BootIOS(ios_title_id, hang_ppc, content_path);
+    }
+    if (!launched)
     {
       PanicAlert("Could not launch IOS %016" PRIx64 " because it is missing from the NAND.\n"
                  "The emulated software will likely hang now.",
@@ -497,7 +505,11 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   if (!tmd.GetContent(tmd.GetBootIndex(), &content))
     return false;
 
-  m_pending_ppc_boot_content_path = m_core.GetContentPath(tmd.GetTitleId(), content);
+  if (!m_core.GetContentPath(tmd.GetTitleId(), content, m_pending_ppc_boot_content_path,
+                             sizeof(m_pending_ppc_boot_content_path)))
+  {
+    m_pending_ppc_boot_content_path[0] = '\0';
+  }
   if (!Core::IsRunning(system))
     return BootstrapPPC();
 
@@ -510,7 +522,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
 bool ESDevice::BootstrapPPC()
 {
   const bool result = GetEmulationKernel().BootstrapPPC(m_pending_ppc_boot_content_path);
-  m_pending_ppc_boot_content_path = {};
+  m_pending_ppc_boot_content_path[0] = '\0';
   return result;
 }
 
@@ -542,7 +554,16 @@ void ESDevice::DoState(PointerWrap& p)
   for (auto& context : m_contexts)
     context.DoState(p);
 
-  p.Do(m_pending_ppc_boot_content_path);
+  // As a string was: its length, then its characters.
+  u32 path_length = static_cast<u32>(std::strlen(m_pending_ppc_boot_content_path));
+  p.Do(path_length);
+  if (path_length >= sizeof(m_pending_ppc_boot_content_path))
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  p.DoArray(m_pending_ppc_boot_content_path, path_length);
+  m_pending_ppc_boot_content_path[path_length] = '\0';
 }
 
 ESDevice::Context* ESDevice::FindActiveContext(s32 fd)

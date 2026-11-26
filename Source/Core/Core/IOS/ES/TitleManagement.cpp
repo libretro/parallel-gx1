@@ -512,8 +512,11 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   if (content_info.IsShared())
   {
     ES::SharedContentMap shared_content{m_ios.GetFSCore()};
-    std::snprintf(content_path, sizeof(content_path), "%s",
-                  shared_content.AddSharedContent(content_info.sha1).c_str());
+    if (!shared_content.AddSharedContent(content_info.sha1, content_path, sizeof(content_path)))
+    {
+      ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to add shared content %08x", content_info.id);
+      return ES_EIO;
+    }
   }
   else
   {
@@ -575,8 +578,8 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
 
     if (content.IsShared())
     {
-      std::string filename;
-      if (!shared_content_map.GetFilenameFromSHA1(content.sha1, &filename))
+      char filename[Common::NAND_PATH_SIZE];
+      if (!shared_content_map.GetFilenameFromSHA1(content.sha1, filename, sizeof(filename)))
         return false;
       continue;
     }
@@ -1042,8 +1045,8 @@ bool IsSharedContentUsedBy(u64 title_id, void* context)
 ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
 {
   ES::SharedContentMap map{m_ios.GetFSCore()};
-  std::string content_path;
-  if (!map.GetFilenameFromSHA1(sha1, &content_path))
+  char content_path[Common::NAND_PATH_SIZE];
+  if (!map.GetFilenameFromSHA1(sha1, content_path, sizeof(content_path)))
     return ES_EINVAL;
 
   // Check whether the shared content is used by a system title.
@@ -1055,7 +1058,7 @@ ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
     return ES_EINVAL;
 
   // Delete the shared content and update the content map.
-  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_path.c_str());
+  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_path);
   if (delete_result != FS::ResultCode::Success)
     return FS::ConvertResult(delete_result);
 

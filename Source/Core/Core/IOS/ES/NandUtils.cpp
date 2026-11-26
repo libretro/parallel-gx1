@@ -537,15 +537,6 @@ void ESCore::FinishAllStaleImports()
   ForEachTitleImport(FinishStaleImportVisitor, this);
 }
 
-std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& content,
-                                   Ticks ticks) const
-{
-  char path[Common::NAND_PATH_SIZE];
-  if (!GetContentPath(title_id, content, path, sizeof(path), ticks))
-    return {};
-  return path;
-}
-
 bool ESCore::GetContentPath(const u64 title_id, const ES::Content& content, char* out,
                             size_t out_size, Ticks ticks) const
 {
@@ -564,44 +555,44 @@ bool ESCore::GetContentPath(const u64 title_id, const ES::Content& content, char
   return length >= 0 && static_cast<size_t>(length) < out_size;
 }
 
-s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size, Ticks ticks)
+s32 ESDevice::WriteSystemFile(const char* path, const u8* data, u32 size, Ticks ticks)
 {
   auto& fs = GetEmulationKernel().GetFSCore();
-  const std::string tmp_path = "/tmp/" + PathToFileName(path);
+  const char* const last_separator = std::strrchr(path, '/');
+  char tmp_path[sizeof("/tmp/") + Common::NAND_PATH_SIZE];
+  std::snprintf(tmp_path, sizeof(tmp_path), "/tmp/%s", last_separator ? last_separator + 1 : path);
 
-  auto result = fs.CreateFile(PID_KERNEL, PID_KERNEL, tmp_path.c_str(), {},
+  auto result = fs.CreateFile(PID_KERNEL, PID_KERNEL, tmp_path, {},
                               {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None}, ticks);
   if (result != FS::ResultCode::Success)
   {
-    ERROR_LOG(IOS_ES, "Failed to create temporary file %s: %d", tmp_path.c_str(),
-              static_cast<int>(result));
+    ERROR_LOG(IOS_ES, "Failed to create temporary file %s: %d", tmp_path, static_cast<int>(result));
     return FS::ConvertResult(result);
   }
 
-  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path.c_str(), FS::Mode::ReadWrite, ticks);
+  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path, FS::Mode::ReadWrite, ticks);
   if (fd.Get() < 0)
   {
-    ERROR_LOG(IOS_ES, "Failed to open temporary file %s: %" PRId64, tmp_path.c_str(),
-              (s64)fd.Get());
+    ERROR_LOG(IOS_ES, "Failed to open temporary file %s: %" PRId64, tmp_path, (s64)fd.Get());
     return fd.Get();
   }
 
   if (fs.WriteBytes(fd.Get(), data, size, ticks) != s32(size))
   {
-    ERROR_LOG(IOS_ES, "Failed to write to temporary file %s", tmp_path.c_str());
+    ERROR_LOG(IOS_ES, "Failed to write to temporary file %s", tmp_path);
     return ES_EIO;
   }
 
   if (const auto ret = fs.Close(fd.Release(), ticks); ret != IPC_SUCCESS)
   {
-    ERROR_LOG(IOS_ES, "Failed to close temporary file %s", tmp_path.c_str());
+    ERROR_LOG(IOS_ES, "Failed to close temporary file %s", tmp_path);
     return ret;
   }
 
-  result = fs.RenameFile(PID_KERNEL, PID_KERNEL, tmp_path.c_str(), path.c_str(), ticks);
+  result = fs.RenameFile(PID_KERNEL, PID_KERNEL, tmp_path, path, ticks);
   if (result != FS::ResultCode::Success)
   {
-    ERROR_LOG(IOS_ES, "Failed to move launch file to final destination (%s): %d", path.c_str(),
+    ERROR_LOG(IOS_ES, "Failed to move launch file to final destination (%s): %d", path,
               static_cast<int>(result));
     return FS::ConvertResult(result);
   }

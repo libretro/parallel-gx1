@@ -305,14 +305,16 @@ public:
   SharedContentMap(const SharedContentMap&) = delete;
   SharedContentMap& operator=(const SharedContentMap&) = delete;
 
-  // False when no shared content has that hash
-  // sha1: 20 bytes
-  bool GetFilenameFromSHA1(const u8* sha1, std::string* filename) const;
+  // Writes the path of the shared content with this hash to out; false when there is none or it
+  // does not fit. sha1: 20 bytes
+  bool GetFilenameFromSHA1(const u8* sha1, char* out, size_t out_size) const;
   // Writes the path of the shared content with this hash to out, reading the map as constructing
   // one does and adding the same ticks; returns false when there is none or it does not fit.
   static bool FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* out, size_t out_size,
                            u64* ticks);
-  std::string AddSharedContent(const u8* sha1);
+  // Writes the path of the shared content with this hash to out, adding it when it is new;
+  // false when out of memory or it does not fit.
+  bool AddSharedContent(const u8* sha1, char* out, size_t out_size);
   bool DeleteSharedContent(const u8* sha1);
   size_t GetEntryCount() const { return m_entry_count; }
   // The 20 byte hash of entry index
