@@ -110,7 +110,10 @@ private:
   NWC24::ErrorCode DetermineSubtask(u16 entry_index, s32* subtask_id) const;
 
   static constexpr u32 MAX_MAIL_SIZE = 208952;
-  static std::string GetValueFromCGIResponse(const std::string& response, const std::string& key);
+  // Writes the value of key in the "key=value" lines of a CGI reply to out, without enclosing
+  // whitespace; false, leaving out empty, when there is none or it does not fit.
+  static bool GetValueFromCGIResponse(const u8* response, size_t response_size, const char* key,
+                                      char* out, size_t out_size);
   static constexpr u8 MAIL_CHECK_KEY[20] = {0xce, 0x4c, 0xf2, 0x9a, 0x3d, 0x6b, 0xe1,
                                             0xc2, 0x61, 0x91, 0x72, 0xb5, 0xcb, 0x29,
                                             0x8c, 0x89, 0x72, 0xd4, 0x50, 0xad};

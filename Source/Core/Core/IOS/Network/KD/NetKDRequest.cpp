@@ -336,21 +336,66 @@ void NetKDRequestDevice::SchedulerWorker(const SchedulerEvent event)
   }
 }
 
-std::string NetKDRequestDevice::GetValueFromCGIResponse(const std::string& response,
-                                                        const std::string& key)
+// Large enough for every value KD reads from a CGI reply, terminator included.
+constexpr size_t CGI_VALUE_SIZE = 256;
+
+static bool IsCGIWhitespace(char c)
 {
-  const std::vector<std::string> raw_fields = SplitString(response, '\n');
-  for (const std::string& field : raw_fields)
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+bool NetKDRequestDevice::GetValueFromCGIResponse(const u8* response, size_t response_size,
+                                                 const char* key, char* out, size_t out_size)
+{
+  const char* const text = reinterpret_cast<const char*>(response);
+  const size_t key_size = std::strlen(key);
+  size_t start = 0;
+  out[0] = '\0';
+  while (start < response_size)
   {
-    const std::vector<std::string> key_value = SplitString(field, '=');
-    if (key_value.size() != 2)
+    const char* const field = text + start;
+    const char* const line_end =
+        static_cast<const char*>(std::memchr(field, '\n', response_size - start));
+    const size_t field_size =
+        line_end ? static_cast<size_t>(line_end - field) : response_size - start;
+    const char* const separator = static_cast<const char*>(std::memchr(field, '=', field_size));
+    start += field_size + 1;
+    if (!separator)
       continue;
 
-    if (key_value[0] == key)
-      return std::string{StripWhitespace(key_value[1])};
+    // A field holds a key and a value: "key=value", or "key=value=" with the last '=' dropped.
+    const size_t key_end = static_cast<size_t>(separator - field);
+    const char* const second =
+        static_cast<const char*>(std::memchr(separator + 1, '=', field_size - key_end - 1));
+    size_t value_end = field_size;
+    if (second)
+    {
+      const size_t second_end = static_cast<size_t>(second - field);
+      if (second_end != field_size - 1)
+        continue;
+      value_end = second_end;
+    }
+    else if (key_end + 1 == field_size)
+    {
+      continue;
+    }
+
+    if (key_end != key_size || std::memcmp(field, key, key_size) != 0)
+      continue;
+
+    size_t value_start = key_end + 1;
+    while (value_start < value_end && IsCGIWhitespace(field[value_start]))
+      value_start++;
+    while (value_end > value_start && IsCGIWhitespace(field[value_end - 1]))
+      value_end--;
+    if (value_end - value_start >= out_size)
+      return false;
+    std::memcpy(out, field + value_start, value_end - value_start);
+    out[value_end - value_start] = '\0';
+    return true;
   }
 
-  return {};
+  return false;
 }
 
 void NetKDRequestDevice::LogError(ErrorType error_type, s32 error_code)
@@ -417,27 +462,31 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
     return NWC24::WC24_ERR_SERVER;
   }
 
-  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
-                                 m_http.GetBodySize());
-  const std::string code = GetValueFromCGIResponse(response_str, "cd");
-  if (code != "100")
+  const u8* const response = m_http.GetBody();
+  const size_t response_size = m_http.GetBodySize();
+  char code[CGI_VALUE_SIZE];
+  GetValueFromCGIResponse(response, response_size, "cd", code, sizeof(code));
+  if (std::strcmp(code, "100"))
   {
     ERROR_LOG(IOS_WC24,
               "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Mail server returned non-success code: %s",
-              code.c_str());
+              code);
     return NWC24::WC24_ERR_SERVER;
   }
 
-  const std::string server_hmac = GetValueFromCGIResponse(response_str, "res");
-  const std::string str_mail_flag = GetValueFromCGIResponse(response_str, "mail.flag");
-  const std::string str_interval = GetValueFromCGIResponse(response_str, "interval");
-  DEBUG_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Server HMAC: %s",
-            server_hmac.c_str());
+  char server_hmac[CGI_VALUE_SIZE];
+  char str_mail_flag[CGI_VALUE_SIZE];
+  char str_interval[CGI_VALUE_SIZE];
+  GetValueFromCGIResponse(response, response_size, "res", server_hmac, sizeof(server_hmac));
+  GetValueFromCGIResponse(response, response_size, "mail.flag", str_mail_flag,
+                          sizeof(str_mail_flag));
+  GetValueFromCGIResponse(response, response_size, "interval", str_interval, sizeof(str_interval));
+  DEBUG_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Server HMAC: %s", server_hmac);
 
   // On a real Wii, a response to a challenge is expected and would be verified by KD.
   const std::string hmac_message =
       StringFromFormat("%" PRIu64 "\nw%016" PRIu64 "\n%s\n%s", (u64)random_number,
-                       (u64)m_config.Id(), str_mail_flag.c_str(), str_interval.c_str());
+                       (u64)m_config.Id(), str_mail_flag, str_interval);
   u8 hashed[20]{};
   hmac_sha1(MAIL_CHECK_KEY, ARRAY_SIZE(MAIL_CHECK_KEY),
             reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size(), hashed);
@@ -445,13 +494,16 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   // On a real Wii, strncmp is used to compare both hashes. This means that it is a case-sensitive
   // comparison. KD will generate a lowercase hash as well as expect a lowercase hash from the
   // server.
-  if (Common::BytesToHexString(hashed, sizeof(hashed)) != server_hmac)
+  char hashed_hex[sizeof(hashed) * 2 + 1];
+  for (size_t i = 0; i < sizeof(hashed); i++)
+    std::snprintf(hashed_hex + i * 2, 3, "%02x", hashed[i]);
+  if (std::strcmp(hashed_hex, server_hmac))
   {
     ERROR_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Server HMAC is invalid.");
     return NWC24::WC24_ERR_SERVER;
   }
 
-  *mail_flag = std::strncmp(str_mail_flag.data(), m_send_list.GetMailFlag().data(), 22) != 0;
+  *mail_flag = std::strncmp(str_mail_flag, m_send_list.GetMailFlag().data(), 22) != 0;
 
   {
     const char* const mail_span = m_http.GetHeaderValue("X-Wii-Mail-Check-Span");
@@ -645,14 +697,15 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   }
 
   // Now check if any mail failed to save to the server.
-  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
-                                 m_http.GetBodySize());
-  const std::string code = GetValueFromCGIResponse(response_str, "cd");
-  if (code != "100")
+  const u8* const response = m_http.GetBody();
+  const size_t response_size = m_http.GetBodySize();
+  char code[CGI_VALUE_SIZE];
+  GetValueFromCGIResponse(response, response_size, "cd", code, sizeof(code));
+  if (std::strcmp(code, "100"))
   {
     ERROR_LOG(IOS_WC24,
               "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Mail server returned non-success code: %s",
-              code.c_str());
+              code);
     return NWC24::WC24_ERR_SERVER;
   }
 
@@ -671,8 +724,10 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
       }
     });
 
-    const std::string value =
-        GetValueFromCGIResponse(response_str, StringFromFormat("cd%u", entry_id));
+    char key[16];
+    char value[CGI_VALUE_SIZE];
+    std::snprintf(key, sizeof(key), "cd%u", entry_id);
+    GetValueFromCGIResponse(response, response_size, key, value, sizeof(value));
 
     s32 cgi_code{};
     const bool did_parse = TryParse(value, &cgi_code);
@@ -1006,9 +1061,10 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
     return IPCReply{IPC_SUCCESS};
   }
 
-  const std::string response_str(reinterpret_cast<const char*>(m_http.GetBody()),
-                                 m_http.GetBodySize());
-  const std::string code = GetValueFromCGIResponse(response_str, "cd");
+  const u8* const response = m_http.GetBody();
+  const size_t response_size = m_http.GetBodySize();
+  char code[CGI_VALUE_SIZE];
+  GetValueFromCGIResponse(response, response_size, "cd", code, sizeof(code));
   s32 cgi_code{};
   const bool did_parse = TryParse(code, &cgi_code);
   if (!did_parse)
@@ -1029,14 +1085,16 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
     return IPCReply{IPC_SUCCESS};
   }
 
-  const std::string password = GetValueFromCGIResponse(response_str, "passwd");
-  const std::string mail_check_id = GetValueFromCGIResponse(response_str, "mlchkid");
-  if (mail_check_id.size() != 32)
+  char password[CGI_VALUE_SIZE];
+  char mail_check_id[CGI_VALUE_SIZE];
+  GetValueFromCGIResponse(response, response_size, "passwd", password, sizeof(password));
+  GetValueFromCGIResponse(response, response_size, "mlchkid", mail_check_id, sizeof(mail_check_id));
+  if (std::strlen(mail_check_id) != 32)
   {
     ERROR_LOG(IOS_WC24,
               "NET_KD_REQ: IOCTL_NWC24_REQUEST_REGISTER_USER_ID: Mail server returned invalid "
               "mlchkid: %s",
-              mail_check_id.c_str());
+              mail_check_id);
     WriteReturnValue(memory, NWC24::WC24_ERR_SERVER, request.buffer_out);
     LogError(ErrorType::Account, NWC24::WC24_ERR_SERVER);
     return IPCReply{IPC_SUCCESS};
