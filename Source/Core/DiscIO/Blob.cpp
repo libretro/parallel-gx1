@@ -22,7 +22,6 @@
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/FileBlob.h"
 #include "DiscIO/NFSBlob.h"
-#include "DiscIO/ScrubbedBlob.h"
 #include "DiscIO/SplitFileBlob.h"
 #include "DiscIO/TGCBlob.h"
 #include "DiscIO/VolumeFileBlobReader.h"
@@ -50,7 +49,6 @@ static decltype(auto) AsOwnClass(Reader* reader, F&& f)
     AS_KIND(TGC, TGCFileReader)
     AS_KIND(WIARVZ, WIARVZFileReader)
     AS_KIND(NFS, NFSFileReader)
-    AS_KIND(Scrubbed, ScrubbedBlob)
     AS_KIND(Cached, CachedBlobReader)
   case BlobReaderKind::VolumeFile:
   default:

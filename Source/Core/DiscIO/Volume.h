@@ -154,6 +154,5 @@ VolumeDisc* CreateDiscForCore(const std::string& path);
 VolumeWAD* CreateWAD(BlobReader* reader);
 VolumeWAD* CreateWAD(const std::string& path);
 Volume* CreateVolume(BlobReader* reader);
-Volume* CreateVolume(const std::string& path);
 
 }  // namespace DiscIO

@@ -52,7 +52,7 @@ enum class DataSizeType
 std::string GetName(BlobType blob_type, bool translate);
 
 // The class a BlobReader is, one for each format and for each reader made over another one
-// (scrubbed, cached, a file in a volume). GetBlobType tells the format, which a reader over
+// (cached, a file in a volume). GetBlobType tells the format, which a reader over
 // another one shares with it.
 enum class BlobReaderKind : u8
 {
@@ -65,7 +65,6 @@ enum class BlobReaderKind : u8
   TGC,
   WIARVZ,
   NFS,
-  Scrubbed,
   Cached,
   VolumeFile,
 };

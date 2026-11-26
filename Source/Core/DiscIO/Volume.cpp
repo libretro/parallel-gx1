@@ -288,9 +288,4 @@ Volume* CreateVolume(BlobReader* reader)
 
   return nullptr;
 }
-
-Volume* CreateVolume(const std::string& path)
-{
-  return CreateVolume(CreateBlobReader(path));
-}
 }  // namespace DiscIO
