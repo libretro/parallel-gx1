@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstring>
 #include <string>
-#include <vector>
 
 #include <retro_atomic.h>
 #include <retro_miscellaneous.h>
@@ -268,17 +267,6 @@ public:
   bool HasFastRandomAccessInBlock() const { return true; }
   std::string GetCompressionMethod() const { return {}; }
 
-  struct PartitionWithType
-  {
-    PartitionWithType(DirectoryBlobPartition&& partition_, PartitionType type_)
-        : partition(std::move(partition_)), type(type_)
-    {
-    }
-
-    DirectoryBlobPartition partition;
-    PartitionType type;
-  };
-
 private:
   // the true root is the first true_root_length chars of the game partition's root
   DirectoryBlobReader(const char* game_partition_root, size_t true_root_length);
@@ -296,7 +284,8 @@ private:
                                  size_t header_bin_size);
   void SetWiiRegionDataFromFile(const char* game_partition_root);
   void SetWiiRegionData(const u8* wii_region_data, size_t size, const char* log_path);
-  void SetPartitions(std::vector<PartitionWithType>&& partitions);
+  // takes the partitions, an array from new[], and their types, from malloc
+  void SetPartitions(DirectoryBlobPartition* partitions, PartitionType* types, u32 count);
   void SetPartitionHeader(DirectoryBlobPartition* partition, u64 partition_address);
 
   // Reads from a host file, through a handle kept open across reads.

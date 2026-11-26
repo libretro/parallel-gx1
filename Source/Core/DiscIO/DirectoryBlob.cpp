@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <utility>
-#include <vector>
 
 #include <encodings/shiftjis.h>
 #include <retro_dirent.h>
@@ -30,7 +29,7 @@
 
 namespace DiscIO
 {
-// Reads as many bytes as the vector fits (or less, if the file is smaller).
+// Reads as many bytes as the buffer fits (or less, if the file is smaller).
 // Returns the number of bytes read.
 static size_t ReadFileToBuffer(const char* path, u8* buffer, size_t size);
 
@@ -495,6 +494,38 @@ static char* IsValidDirectoryBlob(const char* dol_path, size_t* true_root_length
   return partition_root;
 }
 
+// The partitions found, with their types; the arrays grow by doubling
+struct PartitionList
+{
+  DirectoryBlobPartition* partitions;  // new[]
+  PartitionType* types;                // malloc
+  u32 count;
+  u32 capacity;
+};
+
+static void AddPartition(PartitionList* list, DirectoryBlobPartition&& partition,
+                         PartitionType type)
+{
+  if (list->count == list->capacity)
+  {
+    const u32 capacity = list->capacity ? list->capacity * 2 : 4;
+    PartitionType* const types =
+        static_cast<PartitionType*>(std::realloc(list->types, capacity * sizeof(PartitionType)));
+    if (!types)
+      return;
+    list->types = types;
+    DirectoryBlobPartition* const partitions = new DirectoryBlobPartition[capacity];
+    for (u32 i = 0; i < list->count; i++)
+      partitions[i] = std::move(list->partitions[i]);
+    delete[] list->partitions;
+    list->partitions = partitions;
+    list->capacity = capacity;
+  }
+  list->partitions[list->count] = std::move(partition);
+  list->types[list->count] = type;
+  list->count++;
+}
+
 DirectoryBlobReader* DirectoryBlobReader::Create(const char* dol_path)
 {
   size_t true_root_length;
@@ -528,8 +559,8 @@ DirectoryBlobReader::DirectoryBlobReader(const char* game_partition_root, size_t
     SetNonpartitionDiscHeaderFromFile(disc_header, game_partition_root);
     SetWiiRegionDataFromFile(game_partition_root);
 
-    std::vector<PartitionWithType> partitions;
-    partitions.emplace_back(std::move(game_partition), PartitionType::Game);
+    PartitionList partitions = {nullptr, nullptr, 0, 0};
+    AddPartition(&partitions, std::move(game_partition), PartitionType::Game);
 
     // the game partition's directory name, without its trailing slash
     const size_t root_length = std::strlen(game_partition_root);
@@ -579,7 +610,7 @@ DirectoryBlobReader::DirectoryBlobReader(const char* game_partition_root, size_t
         std::memcpy(path + base_length, name, length);
         path[base_length + length] = DIR_SEP_CHR;
         path[base_length + length + 1] = '\0';
-        partitions.emplace_back(DirectoryBlobPartition(path, &m_is_wii), type);
+        AddPartition(&partitions, DirectoryBlobPartition(path, &m_is_wii), type);
       }
       if (dir)
         retro_closedir(dir);
@@ -587,7 +618,7 @@ DirectoryBlobReader::DirectoryBlobReader(const char* game_partition_root, size_t
     }
     std::free(game_partition_directory_name);
 
-    SetPartitions(std::move(partitions));
+    SetPartitions(partitions.partitions, partitions.types, partitions.count);
   }
 }
 
@@ -840,34 +871,50 @@ void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t siz
                               ContentMemory(blob, 0));
 }
 
-static bool PartitionLess(const DirectoryBlobReader::PartitionWithType& lhs,
-                          const DirectoryBlobReader::PartitionWithType& rhs)
+static bool PartitionLess(const DirectoryBlobPartition* partitions, const PartitionType* types,
+                          u32 lhs, u32 rhs)
 {
-  if (lhs.type == rhs.type)
-    return std::strcmp(lhs.partition.GetRootDirectory(), rhs.partition.GetRootDirectory()) < 0;
+  if (types[lhs] == types[rhs])
+  {
+    return std::strcmp(partitions[lhs].GetRootDirectory(), partitions[rhs].GetRootDirectory()) < 0;
+  }
 
   // Ascending sort by partition type, except Update (1) comes before before Game (0)
-  return (lhs.type > PartitionType::Update || rhs.type > PartitionType::Update) ?
-             lhs.type < rhs.type :
-             lhs.type > rhs.type;
+  return (types[lhs] > PartitionType::Update || types[rhs] > PartitionType::Update) ?
+             types[lhs] < types[rhs] :
+             types[lhs] > types[rhs];
 }
 
-void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partitions)
+void DirectoryBlobReader::SetPartitions(DirectoryBlobPartition* partitions, PartitionType* types,
+                                        u32 count)
 {
-  // a handful of partitions: insertion sort
-  for (size_t i = 1; i < partitions.size(); i++)
+  // a handful of partitions: insertion sort of their indices
+  u32* const order = static_cast<u32*>(std::malloc((count ? count : 1) * sizeof(u32)));
+  if (!order)
   {
-    for (size_t j = i; j > 0 && PartitionLess(partitions[j], partitions[j - 1]); j--)
-      std::swap(partitions[j], partitions[j - 1]);
+    delete[] partitions;
+    std::free(types);
+    return;
+  }
+  for (u32 i = 0; i < count; i++)
+  {
+    u32 j;
+    order[i] = i;
+    for (j = i; j > 0 && PartitionLess(partitions, types, order[j], order[j - 1]); j--)
+    {
+      const u32 moved = order[j];
+      order[j] = order[j - 1];
+      order[j - 1] = moved;
+    }
   }
 
   u32 subtable_1_size = 0;
-  while (subtable_1_size < partitions.size() && subtable_1_size < 3 &&
-         partitions[subtable_1_size].type <= PartitionType::Channel)
+  while (subtable_1_size < count && subtable_1_size < 3 &&
+         types[order[subtable_1_size]] <= PartitionType::Channel)
   {
     ++subtable_1_size;
   }
-  const u32 subtable_2_size = static_cast<u32>(partitions.size() - subtable_1_size);
+  const u32 subtable_2_size = count - subtable_1_size;
 
   constexpr u32 PARTITION_TABLE_ADDRESS = 0x40000;
   constexpr u32 PARTITION_SUBTABLE1_OFFSET = 0x20;
@@ -875,7 +922,12 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
   const size_t partition_table_size = PARTITION_SUBTABLE2_OFFSET + subtable_2_size * 8;
   ContentBlob* const table_blob = ZeroedBlob(partition_table_size);
   if (!table_blob)
+  {
+    std::free(order);
+    delete[] partitions;
+    std::free(types);
     return;
+  }
   u8* const partition_table = ContentBlobData(table_blob);
 
   Write32(subtable_1_size, 0x0, partition_table);
@@ -886,19 +938,21 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
     Write32((PARTITION_TABLE_ADDRESS + PARTITION_SUBTABLE2_OFFSET) >> 2, 0xC, partition_table);
   }
 
-  m_partitions = new DirectoryBlobPartition[partitions.size()];
-  m_partition_data_offsets = new u64[partitions.size()];
+  m_partitions = new DirectoryBlobPartition[count];
+  m_partition_data_offsets = new u64[count];
 
   constexpr u64 STANDARD_UPDATE_PARTITION_ADDRESS = 0x50000;
   constexpr u64 STANDARD_GAME_PARTITION_ADDRESS = 0xF800000;
   u64 partition_address = STANDARD_UPDATE_PARTITION_ADDRESS;
   u64 offset_in_table = PARTITION_SUBTABLE1_OFFSET;
-  for (size_t i = 0; i < partitions.size(); ++i)
+  for (u32 i = 0; i < count; ++i)
   {
+    DirectoryBlobPartition& partition = partitions[order[i]];
+    const PartitionType type = types[order[i]];
     if (i == subtable_1_size)
       offset_in_table = PARTITION_SUBTABLE2_OFFSET;
 
-    if (partitions[i].type == PartitionType::Game)
+    if (type == PartitionType::Game)
     {
       if (partition_address < STANDARD_GAME_PARTITION_ADDRESS)
         partition_address = STANDARD_GAME_PARTITION_ADDRESS;
@@ -906,18 +960,17 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
 
     Write32(static_cast<u32>(partition_address >> 2), u32(offset_in_table), partition_table);
     offset_in_table += 4;
-    Write32(static_cast<u32>(partitions[i].type), u32(offset_in_table), partition_table);
+    Write32(static_cast<u32>(type), u32(offset_in_table), partition_table);
     offset_in_table += 4;
 
-    SetPartitionHeader(&partitions[i].partition, partition_address);
+    SetPartitionHeader(&partition, partition_address);
 
-    const u64 data_size =
-        Common::AlignUp(partitions[i].partition.GetDataSize(), VolumeWii::BLOCK_DATA_SIZE);
-    partitions[i].partition.SetDataSize(data_size);
+    const u64 data_size = Common::AlignUp(partition.GetDataSize(), VolumeWii::BLOCK_DATA_SIZE);
+    partition.SetDataSize(data_size);
     const u64 encrypted_data_size =
         (data_size / VolumeWii::BLOCK_DATA_SIZE) * VolumeWii::BLOCK_TOTAL_SIZE;
     const u64 partition_data_offset = partition_address + PARTITION_DATA_OFFSET;
-    m_partitions[m_partition_count] = std::move(partitions[i].partition);
+    m_partitions[m_partition_count] = std::move(partition);
     m_partition_data_offsets[m_partition_count] = partition_data_offset;
     m_partition_count++;
     m_nonpartition_contents.Add(partition_data_offset, encrypted_data_size,
@@ -927,6 +980,9 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
     partition_address = Common::AlignUp(unaligned_next_partition_address, 0x10000ull);
   }
   m_data_size = partition_address;
+  std::free(order);
+  delete[] partitions;
+  std::free(types);
 
   m_nonpartition_contents.Add(PARTITION_TABLE_ADDRESS, partition_table_size,
                               ContentMemory(table_blob, 0));
