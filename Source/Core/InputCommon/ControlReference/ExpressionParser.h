@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <memory>
 #include <new>
 #include <string>
@@ -106,10 +107,20 @@ class ControlQualifier
 public:
   bool has_device;
   Core::DeviceQualifier device_qualifier;
-  // Makes no distinction between input and output
-  std::string control_name;
+  // Makes no distinction between input and output; a longer name is cut to fit
+  static constexpr std::size_t CONTROL_NAME_SIZE = 256;
+  char control_name[CONTROL_NAME_SIZE];
 
-  ControlQualifier() : has_device(false) {}
+  ControlQualifier() : has_device(false), control_name{} {}
+
+  // The name from len characters of str, cut to fit
+  void SetControlName(const char* str, std::size_t len)
+  {
+    if (len >= sizeof(control_name))
+      len = sizeof(control_name) - 1;
+    std::memcpy(control_name, str, len);
+    control_name[len] = '\0';
+  }
 
   // From "device:control", or a control of the default device: len characters, not terminated.
   void FromString(const char* str, std::size_t len)
@@ -122,12 +133,12 @@ public:
     if (has_device)
     {
       device_qualifier.FromString(str, col_pos - 1);
-      control_name.assign(str + col_pos, len - col_pos);
+      SetControlName(str + col_pos, len - col_pos);
     }
     else
     {
       device_qualifier.FromString(str, 0);
-      control_name.assign(str, len);
+      SetControlName(str, len);
     }
   }
 };

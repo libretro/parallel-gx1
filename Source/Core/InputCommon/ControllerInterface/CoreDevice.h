@@ -3,11 +3,8 @@
 
 #pragma once
 
+#include <cstddef>
 #include <limits>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <vector>
 
 #include <retro_atomic.h>
 
@@ -75,10 +72,6 @@ public:
     virtual ~Control() = default;
     /* The control's name, kept by the control for as long as it lives */
     virtual const char* GetName() const = 0;
-
-    // May be overridden to allow multiple valid names.
-    // Useful for backwards-compatible configurations when names change.
-    virtual bool IsMatchingName(std::string_view name) const;
 
     // May be overridden to hide in UI.
     // Useful for backwards-compatible configurations when names change.
@@ -159,8 +152,9 @@ public:
   Output* const* Outputs() const { return m_outputs; }
   int NumOutputs() const { return m_num_outputs; }
 
-  Input* FindInput(std::string_view name) const;
-  Output* FindOutput(std::string_view name) const;
+  // The input or output named name, or nullptr
+  Input* FindInput(const char* name) const;
+  Output* FindOutput(const char* name) const;
 
 protected:
   void AddInput(Input* const i);
@@ -187,11 +181,11 @@ private:
 class DeviceQualifier
 {
 public:
-  DeviceQualifier() : cid(-1) {}
-  DeviceQualifier(std::string source_, const int id_, std::string name_)
-      : source(std::move(source_)), cid(id_), name(std::move(name_))
-  {
-  }
+  // Longer sources and names are cut to fit, terminator included
+  static constexpr std::size_t SOURCE_SIZE = 64;
+  static constexpr std::size_t NAME_SIZE = 256;
+
+  DeviceQualifier() : source{}, cid(-1), name{} {}
   void FromDevice(const Device* const dev);
   // From "source/cid/name": len characters, not terminated
   void FromString(const char* str, std::size_t len);
@@ -203,9 +197,9 @@ public:
 
   bool operator==(const Device* dev) const;
 
-  std::string source;
+  char source[SOURCE_SIZE];
   int cid;
-  std::string name;
+  char name[NAME_SIZE];
 };
 
 class DeviceContainer
@@ -213,9 +207,6 @@ class DeviceContainer
 public:
   // The most devices listed at once
   static constexpr u32 MAX_DEVICES = 64;
-
-  Device::Input* FindInput(std::string_view name, const Device* def_dev) const;
-  Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
   /* Calls fn(device, ctx) for every device, without copying the list. */
   void ForEachDevice(void (*fn)(Device* device, void* ctx), void* ctx) const

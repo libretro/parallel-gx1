@@ -1429,7 +1429,7 @@ static ParseResult ParseComplexExpression(const std::string& str)
 static Expression* ParseBarewordExpression(const std::string& str)
 {
   ControlQualifier qualifier;
-  qualifier.control_name = str;
+  qualifier.SetControlName(str.c_str(), str.size());
   qualifier.has_device = false;
 
   // This control expression will only work (find the specified control) with the default device.

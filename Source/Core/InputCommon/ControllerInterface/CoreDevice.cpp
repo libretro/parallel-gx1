@@ -70,33 +70,28 @@ void Device::AddOutput(Device::Output* const o)
   m_outputs[m_num_outputs++] = o;
 }
 
-Device::Input* Device::FindInput(std::string_view name) const
+Device::Input* Device::FindInput(const char* name) const
 {
   int i;
   for (i = 0; i < m_num_inputs; i++)
   {
-    if (m_inputs[i]->IsMatchingName(name))
+    if (!strcmp(m_inputs[i]->GetName(), name))
       return m_inputs[i];
   }
 
   return nullptr;
 }
 
-Device::Output* Device::FindOutput(std::string_view name) const
+Device::Output* Device::FindOutput(const char* name) const
 {
   int i;
   for (i = 0; i < m_num_outputs; i++)
   {
-    if (m_outputs[i]->IsMatchingName(name))
+    if (!strcmp(m_outputs[i]->GetName(), name))
       return m_outputs[i];
   }
 
   return nullptr;
-}
-
-bool Device::Control::IsMatchingName(std::string_view name) const
-{
-  return std::string_view(GetName()) == name;
 }
 
 //
@@ -108,7 +103,7 @@ std::size_t DeviceQualifier::ToString(char* buf, std::size_t size) const
 {
   int len;
 
-  if (source.empty() && (cid < 0) && name.empty())
+  if (!source[0] && (cid < 0) && !name[0])
   {
     if (size)
       buf[0] = '\0';
@@ -116,9 +111,9 @@ std::size_t DeviceQualifier::ToString(char* buf, std::size_t size) const
   }
 
   if (cid > -1)
-    len = snprintf(buf, size, "%s/%d/%s", source.c_str(), cid, name.c_str());
+    len = snprintf(buf, size, "%s/%d/%s", source, cid, name);
   else
-    len = snprintf(buf, size, "%s//%s", source.c_str(), name.c_str());
+    len = snprintf(buf, size, "%s//%s", source, name);
   return len > 0 ? static_cast<std::size_t>(len) : 0;
 }
 
@@ -127,6 +122,15 @@ std::size_t DeviceQualifier::ToString(char* buf, std::size_t size) const
 //
 // Set a device qualifier from a string / unserialize
 //
+// The len characters of text, terminated, as much as fits in the buffer of size characters
+static void AssignText(char* buffer, std::size_t size, const char* text, std::size_t len)
+{
+  if (len >= size)
+    len = size - 1;
+  memcpy(buffer, text, len);
+  buffer[len] = '\0';
+}
+
 void DeviceQualifier::FromString(const char* str, std::size_t len)
 {
   const char* const end = str + len;
@@ -138,9 +142,9 @@ void DeviceQualifier::FromString(const char* str, std::size_t len)
 
   // "source/cid/name"; the name may itself contain '/'
   first = static_cast<const char*>(memchr(str, '/', len));
-  source.assign(str, first ? static_cast<std::size_t>(first - str) : len);
+  AssignText(source, sizeof(source), str, first ? static_cast<std::size_t>(first - str) : len);
   cid = -1;
-  name.clear();
+  name[0] = '\0';
   if (!first)
     return;
   second =
@@ -159,7 +163,7 @@ void DeviceQualifier::FromString(const char* str, std::size_t len)
   cid = static_cast<int>(negative ? 0u - value : value);
 
   if (second != end)
-    name.assign(second + 1, static_cast<std::size_t>(end - second - 1));
+    AssignText(name, sizeof(name), second + 1, static_cast<std::size_t>(end - second - 1));
 }
 
 //
@@ -169,16 +173,16 @@ void DeviceQualifier::FromString(const char* str, std::size_t len)
 //
 void DeviceQualifier::FromDevice(const Device* const dev)
 {
-  name = dev->GetName();
+  AssignText(name, sizeof(name), dev->GetName(), strlen(dev->GetName()));
   cid = dev->GetId();
-  source = dev->GetSource();
+  AssignText(source, sizeof(source), dev->GetSource(), strlen(dev->GetSource()));
 }
 
 bool DeviceQualifier::operator==(const Device* const dev) const
 {
   if (dev->GetId() == cid)
-    if (!strcmp(dev->GetName(), name.c_str()))
-      if (!strcmp(dev->GetSource(), source.c_str()))
+    if (!strcmp(dev->GetName(), name))
+      if (!strcmp(dev->GetSource(), source))
         return true;
 
   return false;
@@ -186,7 +190,7 @@ bool DeviceQualifier::operator==(const Device* const dev) const
 
 bool DeviceQualifier::operator==(const DeviceQualifier& devq) const
 {
-  return cid == devq.cid && name == devq.name && source == devq.source;
+  return cid == devq.cid && !strcmp(name, devq.name) && !strcmp(source, devq.source);
 }
 
 void DeviceContainer::FreeDeviceList(quiesce_node_t* node)
@@ -230,33 +234,6 @@ bool DeviceContainer::GetDefaultDevice(DeviceQualifier* qualifier) const
 
   qualifier->FromDevice(list->devices[0]);
   return true;
-}
-
-Device::Input* DeviceContainer::FindInput(std::string_view name, const Device* def_dev) const
-{
-  if (def_dev)
-  {
-    Device::Input* const inp = def_dev->FindInput(name);
-    if (inp)
-      return inp;
-  }
-
-  InputReadScope scope;
-  const DeviceList* const list = PeekDevices();
-  for (u32 d = 0; list && d < list->count; d++)
-  {
-    Device::Input* const i = list->devices[d]->FindInput(name);
-
-    if (i)
-      return i;
-  }
-
-  return nullptr;
-}
-
-Device::Output* DeviceContainer::FindOutput(std::string_view name, const Device* def_dev) const
-{
-  return def_dev->FindOutput(name);
 }
 
 bool DeviceContainer::HasConnectedDevice(const DeviceQualifier& qualifier) const
