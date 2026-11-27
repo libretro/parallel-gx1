@@ -62,6 +62,41 @@ public:
     DoContiguousContainer(x);
   }
 
+  // A terminated string, kept as its u32 length and its bytes as a std::string is. Read mode
+  // keeps what fits in the buffer of size bytes, terminated, and passes over the rest.
+  void DoCString(char* buffer, u32 size)
+  {
+    u32 length = IsReadMode() ? 0 : static_cast<u32>(std::strlen(buffer));
+    Do(length);
+    u8* const bytes = DoSkip(length);
+    if (!bytes || IsMeasureMode())
+    {
+      if (IsReadMode())
+        buffer[0] = '\0';
+      return;
+    }
+
+    switch (m_mode)
+    {
+    case Mode::Read:
+    {
+      const u32 kept = length < size ? length : size - 1;
+      std::memcpy(buffer, bytes, kept);
+      buffer[kept] = '\0';
+      break;
+    }
+    case Mode::Write:
+      std::memcpy(bytes, buffer, length);
+      break;
+    case Mode::Verify:
+      DEBUG_ASSERT_MSG(COMMON, !std::memcmp(buffer, bytes, length),
+                       "Savestate verification failure: string %s.\n", buffer);
+      break;
+    case Mode::Measure:
+      break;
+    }
+  }
+
   template <typename V, auto last_member, typename = decltype(last_member)>
   void DoArray(Common::EnumMap<V, last_member>& x)
   {

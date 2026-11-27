@@ -132,7 +132,7 @@ private:
   std::string m_rom_path;
   std::string m_save_path;
   u8 m_rom_hash[20] = {};
-  std::string m_game_title;
+  char m_game_title[17] = {};  // as mGameInfo gives it
 
   mCore* m_core{};
   mCoreSync m_core_sync{};

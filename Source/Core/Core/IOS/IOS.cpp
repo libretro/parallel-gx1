@@ -987,9 +987,9 @@ void EmulationKernel::DoState(PointerWrap& p)
         {
         case Device::DeviceType::Static:
         {
-          std::string device_name;
-          p.Do(device_name);
-          SetDescriptor(i, GetDeviceByName(device_name.c_str()));
+          char device_name[64];
+          p.DoCString(device_name, sizeof(device_name));
+          SetDescriptor(i, GetDeviceByName(device_name));
           break;
         }
         case Device::DeviceType::OH0:
@@ -1015,8 +1015,8 @@ void EmulationKernel::DoState(PointerWrap& p)
         p.Do(device_type);
         if (device_type == Device::Device::DeviceType::Static)
         {
-          std::string device_name = descriptor->GetDeviceName();
-          p.Do(device_name);
+          // written, which leaves it as it is
+          p.DoCString(const_cast<char*>(descriptor->GetDeviceName().c_str()), 0);
         }
         else
         {

@@ -67,7 +67,7 @@ private:
   // most 1 interesting position to keep track of.
   u32 m_cursor{};
 
-  std::string m_buffer;
+  char m_buffer[1024] = {};  // the OSReport line so far
   bool m_fonts_loaded{};
 
   void UpdateRTC();

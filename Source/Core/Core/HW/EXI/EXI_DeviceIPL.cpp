@@ -158,7 +158,7 @@ void CEXIIPL::DoState(PointerWrap& p)
   p.Do(m_command);
   p.Do(m_command_bytes_received);
   p.Do(m_cursor);
-  p.Do(m_buffer);
+  p.DoCString(m_buffer, sizeof(m_buffer));
   p.Do(m_fonts_loaded);
 }
 
@@ -291,13 +291,18 @@ void CEXIIPL::TransferByte(u8& data)
     auto UartFifoAccess = [&] {
       if (m_command.is_write())
       {
+        // a line too long for the buffer is logged in parts
+        const size_t length = std::strlen(m_buffer);
         if (data != '\0')
-          m_buffer += data;
+        {
+          m_buffer[length] = static_cast<char>(data);
+          m_buffer[length + 1] = '\0';
+        }
 
-        if (data == '\r')
+        if (data == '\r' || length + 2 == sizeof(m_buffer))
         {
           NOTICE_LOG(OSREPORT, "%s", SHIFTJISToUTF8(m_buffer).c_str());
-          m_buffer.clear();
+          m_buffer[0] = '\0';
         }
       }
       else

@@ -14,6 +14,7 @@
 #include <mgba/internal/gb/gb.h>
 #include <mgba/internal/gba/gba.h>
 
+#include <compat/strl.h>
 #include <file/archive_file.h>
 #include <lists/string_list.h>
 
@@ -266,7 +267,7 @@ bool Core::Start(u64 gc_ticks)
 
     mGameInfo info;
     m_core->getGameInfo(m_core, &info);
-    m_game_title = info.title;
+    strlcpy(m_game_title, info.title, sizeof(m_game_title));
 
     m_save_path = GetSavePath(m_rom_path, m_device_number);
     if (!m_save_path.empty() && !LoadSave(m_save_path.c_str()))
@@ -321,7 +322,7 @@ void Core::Stop()
   m_rom_path = {};
   m_save_path = {};
   memset(m_rom_hash, 0, sizeof(m_rom_hash));
-  m_game_title = {};
+  m_game_title[0] = '\0';
 }
 
 void Core::Reset()
@@ -695,12 +696,13 @@ void Core::DoState(PointerWrap& p)
   u8 old_hash[sizeof(m_rom_hash)];
   memcpy(old_hash, m_rom_hash, sizeof(old_hash));
   p.Do(m_rom_hash);
-  auto old_title = m_game_title;
-  p.Do(m_game_title);
+  char old_title[sizeof(m_game_title)];
+  std::memcpy(old_title, m_game_title, sizeof(old_title));
+  p.DoCString(m_game_title, sizeof(m_game_title));
 
   if (p.IsReadMode() && (has_rom != !m_rom_path.empty() ||
                          (has_rom && (memcmp(old_hash, m_rom_hash, sizeof(old_hash)) != 0 ||
-                                      old_title != m_game_title))))
+                                      std::strcmp(old_title, m_game_title) != 0))))
   {
     ::Core::DisplayMessage("Incompatible ROM state in GBA%d. Aborting load state.",
                            m_device_number + 1);
