@@ -30,7 +30,7 @@ static bool IsStackBottom(u32 addr)
 static const char* GetDescription(const PPCSymbolDB& ppc_symbol_db, u32 addr)
 {
   const Common::Symbol* const symbol = ppc_symbol_db.GetSymbolFromAddr(addr);
-  return symbol ? symbol->name.c_str() : " --- ";
+  return symbol && symbol->name ? symbol->name : " --- ";
 }
 
 void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)

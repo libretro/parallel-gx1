@@ -3,14 +3,10 @@
 
 #include "Core/PowerPC/PPCSymbolDB.h"
 
-#include <algorithm>
-#include <cstring>
-#include <map>
-#include <string>
-#include <string_view>
-#include <utility>
-
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
@@ -27,68 +23,64 @@ PPCSymbolDB::PPCSymbolDB() = default;
 
 PPCSymbolDB::~PPCSymbolDB() = default;
 
-void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const char* name,
                                  Common::Symbol::Type type)
 {
   AddKnownSymbol(startAddr, size, name, type, &m_functions);
 }
 
-void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                                 Common::Symbol::Type type, XFuncMap* functions)
+void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const char* name,
+                                 Common::Symbol::Type type, Common::SymbolList* functions)
 {
-  const auto [iter, inserted] = functions->try_emplace(startAddr, name);
-
-  Common::Symbol& symbol = iter->second;
-  symbol.type = type;
+  bool inserted;
+  Common::Symbol* const symbol = functions->FindOrInsert(startAddr, name, &inserted);
+  if (!symbol)
+    return;
+  symbol->type = type;
 
   if (!inserted)
   {
     // already got it, let's just update name & size to be sure.
-    symbol.Rename(name);
-    symbol.size = size;
+    symbol->Rename(name);
+    symbol->size = size;
   }
   else
   {
     // new symbol. run analyze.
-    symbol.address = startAddr;
+    symbol->address = startAddr;
 
-    if (symbol.type == Common::Symbol::Type::Function)
+    if (symbol->type == Common::Symbol::Type::Function)
     {
-      PPCAnalyst::AnalyzeFunction(startAddr, symbol, size);
+      PPCAnalyst::AnalyzeFunction(startAddr, *symbol, size);
       // Do not truncate symbol when a size is expected
-      if (size != 0 && symbol.size != size)
+      if (size != 0 && symbol->size != size)
       {
-        WARN_LOG(SYMBOLS, "Analysed symbol (%s) size mismatch, %u expected but %u computed",
-                 name.c_str(), size, symbol.size);
-        symbol.size = size;
+        WARN_LOG(SYMBOLS, "Analysed symbol (%s) size mismatch, %u expected but %u computed", name,
+                 size, symbol->size);
+        symbol->size = size;
       }
     }
     else
     {
-      symbol.size = size;
+      symbol->size = size;
     }
   }
 }
 
 const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
 {
-  if (m_functions.empty())
-    return nullptr;
+  const u32 index = m_functions.LowerBound(addr);
 
-  auto it = m_functions.lower_bound(addr);
+  // If the address is exactly the start address of a symbol, we're done.
+  if (index < m_functions.count && m_functions.symbols[index].address == addr)
+    return &m_functions.symbols[index];
 
-  if (it != m_functions.end())
+  // Otherwise, check whether the address is within the bounds of a symbol.
+  if (index > 0)
   {
-    // If the address is exactly the start address of a symbol, we're done.
-    if (it->second.address == addr)
-      return &it->second;
-  }
-  if (it != m_functions.begin())
-  {
-    // Otherwise, check whether the address is within the bounds of a symbol.
-    --it;
-    if (addr >= it->second.address && addr < it->second.address + it->second.size)
-      return &it->second;
+    const Common::Symbol& symbol = m_functions.symbols[index - 1];
+    if (addr >= symbol.address && addr < symbol.address + symbol.size)
+      return &symbol;
   }
 
   return nullptr;
@@ -98,21 +90,102 @@ const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
 bool PPCSymbolDB::LoadMapOnBoot()
 {
   // the map file for the active title
-  std::string existing_map_file = File::GetUserPath(D_MAPS_IDX) +
-                                  SConfig::GetInstance().m_debugger_game_id + ".map";
-  if (!File::Exists(existing_map_file))
+  const std::string& maps_directory = File::GetUserPath(D_MAPS_IDX);
+  const std::string& game_id = SConfig::GetInstance().m_debugger_game_id;
+  const size_t path_size = maps_directory.size() + game_id.size() + sizeof(".map");
+  char* const existing_map_file = static_cast<char*>(std::malloc(path_size));
+  if (!existing_map_file)
     return Clear();
+  snprintf(existing_map_file, path_size, "%s%s.map", maps_directory.c_str(), game_id.c_str());
 
+  bool changed;
+  if (!File::Exists(existing_map_file))
+    changed = Clear();
+  // If the map is already loaded (such as restarting the same game), skip reloading.
+  else if (!IsEmpty() && m_map_name && !std::strcmp(existing_map_file, m_map_name))
+    changed = false;
+  else if (!LoadMap(existing_map_file))
+    changed = Clear();
+  else
+    changed = true;
+
+  std::free(existing_map_file);
+  return changed;
+}
+
+static bool IsMapWhitespace(char c)
+{
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+// The text without the whitespace around it, as its start and *length
+static const char* TrimMapWhitespace(const char* text, size_t* length)
+{
+  size_t end = std::strlen(text);
+  while (end && IsMapWhitespace(text[end - 1]))
+    end--;
+  size_t start = 0;
+  while (start < end && IsMapWhitespace(text[start]))
+    start++;
+  *length = end - start;
+  return text + start;
+}
+
+static bool IsHexWord(const char* word, size_t length)
+{
+  if (!length)
+    return false;
+  for (size_t i = 0; i < length; i++)
   {
-    // If the map is already loaded (such as restarting the same game), skip reloading.
-    if (!IsEmpty() && existing_map_file == m_map_name)
+    const char c = word[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
       return false;
   }
-
-  if (!LoadMap(std::move(existing_map_file)))
-    return Clear();
-
   return true;
+}
+
+// Some entries in the table have a function name followed by " (entry of " followed by a
+// container name, followed by ")"; the name becomes "<container>::<name>", keeping what
+// follows the entry part, usually the object names.
+static void ParseEntryOf(char* name_buf)
+{
+  static const char ENTRY_OF_STRING[] = " (entry of ";
+  char* const s1 = std::strstr(name_buf, ENTRY_OF_STRING);
+  if (!s1)
+    return;
+
+  char container[512];
+  char* ptr = s1 + sizeof(ENTRY_OF_STRING) - 1;
+  if (sscanf(ptr, "%511s", container) != 1)
+    container[0] = '\0';
+  // Skip sections, those start with a dot, e.g. (entry of .text)
+  char* const s2 = std::strchr(container, ')');
+  if (!s2 || *container == '.')
+    return;
+
+  ptr += std::strlen(container);
+  std::memmove(s1, ptr, std::strlen(ptr) + 1);
+  *s2 = '\0';
+  // "<container>::<name>", cut to the buffer's 512 octets as the old strcat ran over them
+  char joined[512];
+  snprintf(joined, sizeof(joined), "%s::%s", container, name_buf);
+  std::memcpy(name_buf, joined, std::strlen(joined) + 1);
+}
+
+static bool WasAlignment(const char* name_buf)
+{
+  return *name_buf == ' ' || (*name_buf >= '0' && *name_buf <= '9');
+}
+
+static void ParseAlignment(char* name_buf, u32* alignment_buf)
+{
+  // the name without the whitespace around it, then the alignment and the name after it
+  char buffer[512];
+  size_t length;
+  const char* const trimmed = TrimMapWhitespace(name_buf, &length);
+  std::memcpy(buffer, trimmed, length);
+  buffer[length] = '\0';
+  sscanf(buffer, "%i %511[^\r\n]", alignment_buf, name_buf);
 }
 
 // The use case for handling bad map files is when you have a game with a map file on the disc,
@@ -137,13 +210,13 @@ bool PPCSymbolDB::LoadMapOnBoot()
 // This one can load both leftover map files on game discs (like Zelda) and
 // CodeWarrior-style map files.
 // bad=true means carefully load map files that might not be from exactly the right version
-bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
+bool PPCSymbolDB::LoadMap(const char* filename, bool bad)
 {
   File::LineReader f(filename);
   if (!f.IsOpen())
     return false;
 
-  XFuncMap new_functions;
+  Common::SymbolList new_functions;
 
   // Two columns are used by Super Smash Bros. Brawl Korean map file
   // Three columns are commonly used
@@ -153,7 +226,7 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
   int bad_count = 0;
 
   char line[512];
-  std::string section_name;
+  char section_name[256] = "";
   const char* text;
   size_t text_length;
   while (f.Next(&text, &text_length))
@@ -175,10 +248,15 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
       continue;
 
     // Support CodeWarrior and Dolphin map
-    if (StripWhitespace(line).ends_with(" section layout") || strcmp(temp, ".text") == 0 ||
-        strcmp(temp, ".init") == 0)
+    static const char SECTION_LAYOUT[] = " section layout";
+    size_t trimmed_length;
+    const char* const trimmed_line = TrimMapWhitespace(line, &trimmed_length);
+    if ((trimmed_length >= sizeof(SECTION_LAYOUT) - 1 &&
+         !std::memcmp(trimmed_line + trimmed_length - (sizeof(SECTION_LAYOUT) - 1), SECTION_LAYOUT,
+                      sizeof(SECTION_LAYOUT) - 1)) ||
+        strcmp(temp, ".text") == 0 || strcmp(temp, ".init") == 0)
     {
-      section_name = temp;
+      std::memcpy(section_name, temp, sizeof(section_name));
       continue;
     }
 
@@ -207,43 +285,43 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
     //    3] _stack_addr found as linker generated symbol
     // ...
     //           10] EXILock(func, global) found in exi.a EXIBios.c
-    if (std::string_view{temp}.ends_with(']'))
+    if (temp[0] && temp[std::strlen(temp) - 1] == ']')
       continue;
 
     // TODO - Handle/Write a parser for:
     //  - Memory map
     //  - Link map
     //  - Linker generated symbols
-    if (section_name.empty())
+    if (!section_name[0])
       continue;
 
     // Column detection heuristic
     if (column_count == 0)
     {
-      constexpr auto is_hex_str = [](const std::string& s) {
-        return !s.empty() && s.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos;
-      };
       // The first four space-separated words of the line
-      std::string words[4];
+      const char* words[4];
+      size_t word_lengths[4];
       size_t word_count = 0;
       {
-        const std::string_view stripped_line = StripWhitespace(line);
         size_t i = 0;
-        while (word_count < 4 && i < stripped_line.size())
+        while (word_count < 4 && i < trimmed_length)
         {
-          while (i < stripped_line.size() && (stripped_line[i] == ' ' || stripped_line[i] == '\t'))
+          while (i < trimmed_length && (trimmed_line[i] == ' ' || trimmed_line[i] == '\t'))
             i++;
           const size_t start = i;
-          while (i < stripped_line.size() && stripped_line[i] != ' ' && stripped_line[i] != '\t')
+          while (i < trimmed_length && trimmed_line[i] != ' ' && trimmed_line[i] != '\t')
             i++;
           if (i > start)
-            words[word_count++] = std::string(stripped_line.substr(start, i - start));
+          {
+            words[word_count] = trimmed_line + start;
+            word_lengths[word_count++] = i - start;
+          }
         }
       }
 
       // Two columns format:
       // 80004000 zz_80004000_
-      if (word_count < 1 || words[0].length() != 8 || !is_hex_str(words[0]))
+      if (word_count < 1 || word_lengths[0] != 8 || !IsHexWord(words[0], word_lengths[0]))
         continue;
       column_count = 2;
 
@@ -251,7 +329,8 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
       //  Starting        Virtual
       //  address  Size   address
       //  -----------------------
-      if (word_count >= 3 && is_hex_str(words[1]) && is_hex_str(words[2]))
+      if (word_count >= 3 && IsHexWord(words[1], word_lengths[1]) &&
+          IsHexWord(words[2], word_lengths[2]))
       {
         column_count = 3;
 
@@ -259,7 +338,7 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
         //  Starting        Virtual  File
         //  address  Size   address  offset
         //  ---------------------------------
-        if (word_count >= 4 && words[3].length() == 8 && is_hex_str(words[3]))
+        if (word_count >= 4 && word_lengths[3] == 8 && IsHexWord(words[3], word_lengths[3]))
           column_count = 4;
       }
     }
@@ -270,56 +349,28 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
     u32 offset = 0;
     u32 alignment = 0;
     char name[512]{};
-    static constexpr char ENTRY_OF_STRING[] = " (entry of ";
-    static constexpr std::string_view ENTRY_OF_VIEW(ENTRY_OF_STRING);
-    auto parse_entry_of = [](char* name_buf) {
-      if (char* s1 = strstr(name_buf, ENTRY_OF_STRING); s1 != nullptr)
-      {
-        char container[512];
-        char* ptr = s1 + ENTRY_OF_VIEW.size();
-        sscanf(ptr, "%511s", container);
-        // Skip sections, those start with a dot, e.g. (entry of .text)
-        if (char* s2 = strchr(container, ')'); s2 != nullptr && *container != '.')
-        {
-          ptr += strlen(container);
-          // Preserve data after the entry part, usually it contains object names
-          strcpy(s1, ptr);
-          *s2 = '\0';
-          strcat(container, "::");
-          strcat(container, name_buf);
-          strcpy(name_buf, container);
-        }
-      }
-    };
-    auto was_alignment = [](const char* name_buf) {
-      return *name_buf == ' ' || (*name_buf >= '0' && *name_buf <= '9');
-    };
-    auto parse_alignment = [](char* name_buf, u32* alignment_buf) {
-      const std::string buffer(StripWhitespace(name_buf));
-      return sscanf(buffer.c_str(), "%i %511[^\r\n]", alignment_buf, name_buf);
-    };
     switch (column_count)
     {
     case 4:
       // sometimes there is no alignment value, and sometimes it is because it is an entry of
       // something else
       sscanf(line, "%08x %08x %08x %08x %511[^\r\n]", &address, &size, &vaddress, &offset, name);
-      if (was_alignment(name))
-        parse_alignment(name, &alignment);
+      if (WasAlignment(name))
+        ParseAlignment(name, &alignment);
       // The `else` statement was omitted to handle symbol already saved in Dolphin symbol map
       // since it doesn't omit the alignment on save for such case.
-      parse_entry_of(name);
+      ParseEntryOf(name);
       break;
     case 3:
       // some entries in the table have a function name followed by " (entry of " followed by a
       // container name, followed by ")"
       // instead of a space followed by a number followed by a space followed by a name
       sscanf(line, "%08x %08x %08x %511[^\r\n]", &address, &size, &vaddress, name);
-      if (was_alignment(name))
-        parse_alignment(name, &alignment);
+      if (WasAlignment(name))
+        ParseAlignment(name, &alignment);
       // The `else` statement was omitted to handle symbol already saved in Dolphin symbol map
       // since it doesn't omit the alignment on save for such case.
-      parse_entry_of(name);
+      ParseEntryOf(name);
       break;
     case 2:
       sscanf(line, "%08x %511[^\r\n]", &address, name);
@@ -327,20 +378,23 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
       break;
     default:
       // Should never happen
-      std::unreachable();
       break;
     }
 
-    // The name, before any tab and the object name after it
-    const std::vector<std::string> parts = SplitString(name, '\t');
-    const std::string name_string(StripWhitespace(parts.size() > 0 ? parts[0] : name));
-
     // Check if this is a valid entry.
-    if (strlen(name) > 0)
+    if (name[0])
     {
+      // The name, before any tab and the object name after it, without the whitespace around it
+      char* const tab = std::strchr(name, '\t');
+      if (tab)
+        *tab = '\0';
+      size_t name_length;
+      char* const name_string = const_cast<char*>(TrimMapWhitespace(name, &name_length));
+      name_string[name_length] = '\0';
+
       bool good;
       // Notes will be treated the same as Data.
-      const Common::Symbol::Type type = section_name == ".text" || section_name == ".init" ?
+      const Common::Symbol::Type type = !strcmp(section_name, ".text") || !strcmp(section_name, ".init") ?
                                             Common::Symbol::Type::Function :
                                             Common::Symbol::Type::Data;
 
@@ -375,7 +429,7 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
         ++good_count;
 
         // notes, which the debugger drew, are not kept
-        if (section_name != ".note")
+        if (strcmp(section_name, ".note") != 0)
           AddKnownSymbol(vaddress, size, name_string, type, &new_functions);
       }
       else
@@ -385,8 +439,14 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
     }
   }
 
-  std::swap(m_functions, new_functions);
-  std::swap(m_map_name, filename);
+  m_functions.Free();
+  m_functions = new_functions;
+  const size_t filename_size = std::strlen(filename) + 1;
+  char* const map_name = static_cast<char*>(std::malloc(filename_size));
+  if (map_name)
+    std::memcpy(map_name, filename, filename_size);
+  std::free(m_map_name);
+  m_map_name = map_name;
 
   NOTICE_LOG(SYMBOLS, "%d symbols loaded, %d symbols ignored.", good_count, bad_count);
   return true;

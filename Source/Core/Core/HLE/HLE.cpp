@@ -8,6 +8,9 @@
 #include <cstring>
 #include <retro_miscellaneous.h>
 
+#include "Common/Assert.h"
+#include "Common/Logging/Log.h"
+#include "Common/MsgHandler.h"
 #include "Common/CommonTypes.h"
 
 #include "Core/Config/MainSettings.h"
@@ -186,7 +189,10 @@ void PatchFunctions(Core::System& system)
     if (os_patches[i].flags == HookFlag::Fixed)
       continue;
 
-    for (const auto& symbol : ppc_symbol_db.GetSymbolsFromName(os_patches[i].name))
+    const size_t name_length = std::strlen(os_patches[i].name);
+    u32 index = 0;
+    while (const Common::Symbol* const symbol =
+               ppc_symbol_db.FindFunctionName(os_patches[i].name, name_length, index, &index))
     {
       for (u32 addr = symbol->address; addr < symbol->address + symbol->size; addr += 4)
       {
@@ -194,6 +200,7 @@ void PatchFunctions(Core::System& system)
         ppc_state.iCache.Invalidate(memory, jit_interface, addr);
       }
       INFO_LOG(OSHLE, "Patching %s %08x", os_patches[i].name, symbol->address);
+      index++;
     }
   }
 
@@ -316,10 +323,10 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
     return addr;
   }
 
-  const auto symbols = power_pc.GetSymbolDB().GetSymbolsFromName(patch_name);
-  if (!symbols.empty())
+  u32 index;
+  if (const Common::Symbol* const symbol = power_pc.GetSymbolDB().FindFunctionName(
+          patch_name.data(), patch_name.size(), 0, &index))
   {
-    const Common::Symbol* const symbol = symbols.front();
     for (u32 addr = symbol->address; addr < symbol->address + symbol->size; addr += 4)
     {
       const u32 slot = FindHookSlot(addr);

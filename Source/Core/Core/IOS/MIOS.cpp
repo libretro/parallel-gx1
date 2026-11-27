@@ -3,6 +3,8 @@
 
 #include "Core/IOS/MIOS.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "Common/Assert.h"
@@ -69,10 +71,18 @@ bool Load(Core::System& system)
   // Load symbols for the IPL if they exist.
   ppc_symbol_db.Clear();
 
-  if (ppc_symbol_db.LoadMap(File::GetUserPath(D_MAPS_IDX) + "mios-ipl.map"))
+  const std::string& maps_directory = File::GetUserPath(D_MAPS_IDX);
+  const size_t map_path_size = maps_directory.size() + sizeof("mios-ipl.map");
+  char* const map_path = static_cast<char*>(std::malloc(map_path_size));
+  if (map_path)
   {
-    ::HLE::Clear();
-    ::HLE::PatchFunctions(system);
+    snprintf(map_path, map_path_size, "%smios-ipl.map", maps_directory.c_str());
+    if (ppc_symbol_db.LoadMap(map_path))
+    {
+      ::HLE::Clear();
+      ::HLE::PatchFunctions(system);
+    }
+    std::free(map_path);
   }
 
   const PowerPC::CoreMode core_mode = power_pc.GetMode();

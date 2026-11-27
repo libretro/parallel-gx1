@@ -70,7 +70,7 @@ static u32 EvaluateBranchTarget(UGeckoInstruction instr, u32 pc)
 // one blr or rfi, and keep scanning.
 bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
 {
-  if (func.name.empty())
+  if (!func.name || !*func.name)
   {
     char name[16];
     snprintf(name, sizeof(name), "zz_%08x_", startAddr);

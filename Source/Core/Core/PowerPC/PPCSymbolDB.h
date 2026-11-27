@@ -3,27 +3,24 @@
 
 #pragma once
 
-#include <string>
-
 #include "Common/CommonTypes.h"
 #include "Common/SymbolDB.h"
 
-// This has functionality overlapping Debugger_Symbolmap. Should merge that stuff in here later.
 class PPCSymbolDB final : public Common::SymbolDB
 {
 public:
   PPCSymbolDB();
   ~PPCSymbolDB();
 
-  void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+  void AddKnownSymbol(u32 startAddr, u32 size, const char* name,
                       Common::Symbol::Type type = Common::Symbol::Type::Function);
 
   const Common::Symbol* GetSymbolFromAddr(u32 addr) const;
 
   bool LoadMapOnBoot();
-  bool LoadMap(std::string filename, bool bad = false);
+  bool LoadMap(const char* filename, bool bad = false);
 
 private:
-  static void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                             Common::Symbol::Type type, XFuncMap* functions);
+  static void AddKnownSymbol(u32 startAddr, u32 size, const char* name, Common::Symbol::Type type,
+                             Common::SymbolList* functions);
 };
