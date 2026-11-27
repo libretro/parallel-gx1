@@ -21,7 +21,6 @@
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCAnalyst.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "Core/PowerPC/SignatureDB/SignatureDB.h"
 #include "Core/System.h"
 
 PPCSymbolDB::PPCSymbolDB() = default;
@@ -29,26 +28,23 @@ PPCSymbolDB::PPCSymbolDB() = default;
 PPCSymbolDB::~PPCSymbolDB() = default;
 
 void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                                 const std::string& object_name, Common::Symbol::Type type)
+                                 Common::Symbol::Type type)
 {
-  AddKnownSymbol(startAddr, size, name, object_name, type, &m_functions, &m_checksum_to_function);
+  AddKnownSymbol(startAddr, size, name, type, &m_functions);
 }
 
 void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                                 const std::string& object_name, Common::Symbol::Type type,
-                                 XFuncMap* functions, XFuncPtrMap* checksum_to_function)
+                                 Common::Symbol::Type type, XFuncMap* functions)
 {
   const auto [iter, inserted] = functions->try_emplace(startAddr, name);
 
   Common::Symbol& symbol = iter->second;
-  symbol.object_name = object_name;
   symbol.type = type;
 
   if (!inserted)
   {
-    // already got it, let's just update name, checksum & size to be sure.
+    // already got it, let's just update name & size to be sure.
     symbol.Rename(name);
-    symbol.hash = SignatureDB::ComputeCodeChecksum(startAddr, startAddr + size - 4);
     symbol.size = size;
   }
   else
@@ -66,52 +62,11 @@ void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& nam
                  name.c_str(), size, symbol.size);
         symbol.size = size;
       }
-      (*checksum_to_function)[symbol.hash].insert(&symbol);
     }
     else
     {
       symbol.size = size;
     }
-  }
-}
-
-void PPCSymbolDB::AddKnownNote(u32 start_addr, u32 size, const std::string& name)
-{
-  AddKnownNote(start_addr, size, name, &m_notes);
-}
-
-void PPCSymbolDB::AddKnownNote(u32 start_addr, u32 size, const std::string& name, XNoteMap* notes)
-{
-  const auto [iter, inserted] = notes->try_emplace(start_addr);
-
-  Common::Note& note = iter->second;
-  note.name = name;
-  note.size = size;
-
-  if (inserted)
-    note.address = start_addr;
-}
-
-void PPCSymbolDB::DetermineNoteLayers()
-{
-  DetermineNoteLayers(&m_notes);
-}
-
-void PPCSymbolDB::DetermineNoteLayers(XNoteMap* notes)
-{
-  if (notes->empty())
-    return;
-
-  for (auto& note : *notes)
-    note.second.layer = 0;
-
-  for (auto iter = notes->begin(); iter != notes->end(); ++iter)
-  {
-    const u32 range = iter->second.address + iter->second.size;
-    auto search = notes->lower_bound(range);
-
-    while (--search != iter)
-      search->second.layer += 1;
   }
 }
 
@@ -139,74 +94,13 @@ const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
   return nullptr;
 }
 
-std::string PPCSymbolDB::GetDescription(u32 addr) const
-{
-  if (const Common::Symbol* const symbol = GetSymbolFromAddr(addr))
-    return symbol->name;
-  return " --- ";
-}
-
-void PPCSymbolDB::FillInCallers()
-{
-  FillInCallers(&m_functions);
-}
-
-void PPCSymbolDB::FillInCallers(XFuncMap* functions)
-{
-  for (auto& p : *functions)
-  {
-    p.second.callers.clear();
-  }
-
-  for (auto& entry : *functions)
-  {
-    Common::Symbol& f = entry.second;
-    for (const Common::SCall& call : f.calls)
-    {
-      const Common::SCall new_call(entry.first, call.call_address);
-      const u32 function_address = call.function;
-
-      auto func_iter = functions->find(function_address);
-      if (func_iter != functions->end())
-      {
-        Common::Symbol& called_function = func_iter->second;
-        called_function.callers.push_back(new_call);
-      }
-      else
-      {
-        // LOG(SYMBOLS, "FillInCallers tries to fill data in an unknown function 0x%08x.",
-        // FunctionAddress);
-        // TODO - analyze the function instead.
-      }
-    }
-  }
-}
-
-// Get map file paths for the active title.
-bool PPCSymbolDB::FindMapFile(std::string* existing_map_file, std::string* writable_map_file)
-{
-  const std::string& game_id = SConfig::GetInstance().m_debugger_game_id;
-  std::string path = File::GetUserPath(D_MAPS_IDX) + game_id + ".map";
-
-  if (writable_map_file)
-    *writable_map_file = path;
-
-  if (File::Exists(path))
-  {
-    if (existing_map_file)
-      *existing_map_file = std::move(path);
-
-    return true;
-  }
-
-  return false;
-}
-
 // Returns true if m_functions was changed.
 bool PPCSymbolDB::LoadMapOnBoot()
 {
-  std::string existing_map_file;
-  if (!PPCSymbolDB::FindMapFile(&existing_map_file, nullptr))
+  // the map file for the active title
+  std::string existing_map_file = File::GetUserPath(D_MAPS_IDX) +
+                                  SConfig::GetInstance().m_debugger_game_id + ".map";
+  if (!File::Exists(existing_map_file))
     return Clear();
 
   {
@@ -250,8 +144,6 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
     return false;
 
   XFuncMap new_functions;
-  XNoteMap new_notes;
-  XFuncPtrMap checksum_to_function;
 
   // Two columns are used by Super Smash Bros. Brawl Korean map file
   // Three columns are commonly used
@@ -439,12 +331,9 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
       break;
     }
 
-    // Split the current name string into separate parts, and get the object name
-    // if it exists.
+    // The name, before any tab and the object name after it
     const std::vector<std::string> parts = SplitString(name, '\t');
     const std::string name_string(StripWhitespace(parts.size() > 0 ? parts[0] : name));
-    const std::string object_filename_string =
-        parts.size() > 1 ? std::string(StripWhitespace(parts[1])) : "";
 
     // Check if this is a valid entry.
     if (strlen(name) > 0)
@@ -485,15 +374,9 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
       {
         ++good_count;
 
-        if (section_name == ".note")
-        {
-          AddKnownNote(vaddress, size, name, &new_notes);
-        }
-        else
-        {
-          AddKnownSymbol(vaddress, size, name_string, object_filename_string, type, &new_functions,
-                         &checksum_to_function);
-        }
+        // notes, which the debugger drew, are not kept
+        if (section_name != ".note")
+          AddKnownSymbol(vaddress, size, name_string, type, &new_functions);
       }
       else
       {
@@ -502,12 +385,7 @@ bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
     }
   }
 
-  Index(&new_functions);
-  DetermineNoteLayers(&new_notes);
-  FillInCallers(&new_functions);
   std::swap(m_functions, new_functions);
-  std::swap(m_notes, new_notes);
-  std::swap(m_checksum_to_function, checksum_to_function);
   std::swap(m_map_name, filename);
 
   NOTICE_LOG(SYMBOLS, "%d symbols loaded, %d symbols ignored.", good_count, bad_count);

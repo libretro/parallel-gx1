@@ -35,7 +35,7 @@ public:
   u32 GetEntryPoint() const { return entryPoint; }
   u32 GetFlags() const { return (u32)(header->e_flags); }
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
-  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const;
+  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db) const;
   bool IsValid() const { return m_is_valid; }
   bool IsWii() const;
 

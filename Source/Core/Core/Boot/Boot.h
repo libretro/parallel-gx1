@@ -179,7 +179,7 @@ public:
   bool IsValid() const;
   bool IsWii() const;
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
-  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const;
+  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db) const;
 
   const BootExecutableKind executable_kind;
 

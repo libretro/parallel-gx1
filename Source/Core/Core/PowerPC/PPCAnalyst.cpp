@@ -16,7 +16,6 @@
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PPCTables.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "Core/PowerPC/SignatureDB/SignatureDB.h"
 #include "Core/System.h"
 
 // Analyzes PowerPC code in memory to find functions
@@ -82,13 +81,9 @@ bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
 
   auto& mmu = Core::System::GetInstance().GetMMU();
 
-  func.calls.clear();
-  func.callers.clear();
   func.size = 0;
-  func.flags = Common::FFLAG_LEAF;
 
   u32 farthestInternalBranchTarget = startAddr;
-  int numInternalBranches = 0;
   for (u32 addr = startAddr; true; addr += 4)
   {
     func.size += 4;
@@ -103,9 +98,6 @@ bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
       func.address = startAddr;
       func.analyzed = true;
       func.size -= 4;
-      func.hash = SignatureDB::ComputeCodeChecksum(startAddr, addr - 4);
-      if (numInternalBranches == 0)
-        func.flags |= Common::FFLAG_STRAIGHT;
       return true;
     }
     const PowerPC::TryReadInstResult read_result = mmu.TryReadInstruction(addr);
@@ -125,20 +117,12 @@ bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
         // Let's calc the checksum and get outta here
         func.address = startAddr;
         func.analyzed = true;
-        func.hash = SignatureDB::ComputeCodeChecksum(startAddr, addr);
-        if (numInternalBranches == 0)
-          func.flags |= Common::FFLAG_STRAIGHT;
         return true;
       }
-      else if (instr.hex == 0x4e800021 || instr.hex == 0x4e800420 || instr.hex == 0x4e800421)
+      else if (instr.hex == 0x4e800021 || instr.hex == 0x4e800420 || instr.hex == 0x4e800421 ||
+               instr.hex == 0x4c000064)
       {
-        func.flags &= ~Common::FFLAG_LEAF;
-        func.flags |= Common::FFLAG_EVIL;
-      }
-      else if (instr.hex == 0x4c000064)
-      {
-        func.flags &= ~Common::FFLAG_LEAF;
-        func.flags |= Common::FFLAG_RFI;
+        // calls through a register, and rfi, which the branch target check cannot follow
       }
       else
       {
@@ -150,17 +134,12 @@ bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
         if (instr.LK || is_external)
         {
           // Found a function call
-          func.calls.emplace_back(target, addr);
-          func.flags &= ~Common::FFLAG_LEAF;
         }
         else if (instr.OPCD == 16)
         {
           // Found a conditional branch
           if (target > farthestInternalBranchTarget)
-          {
             farthestInternalBranchTarget = target;
-          }
-          numInternalBranches++;
         }
       }
     }

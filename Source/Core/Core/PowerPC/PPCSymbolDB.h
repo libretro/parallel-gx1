@@ -16,29 +16,14 @@ public:
   ~PPCSymbolDB();
 
   void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                      const std::string& object_name,
                       Common::Symbol::Type type = Common::Symbol::Type::Function);
-  void AddKnownNote(u32 start_addr, u32 size, const std::string& name);
 
   const Common::Symbol* GetSymbolFromAddr(u32 addr) const;
-  bool NoteExists() const { return !m_notes.empty(); }
-  void DetermineNoteLayers();
-
-  std::string GetDescription(u32 addr) const;
-
-  void FillInCallers();
 
   bool LoadMapOnBoot();
   bool LoadMap(std::string filename, bool bad = false);
 
-  static bool FindMapFile(std::string* existing_map_file, std::string* writable_map_file);
-
 private:
   static void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                             const std::string& object_name, Common::Symbol::Type type,
-                             XFuncMap* functions, XFuncPtrMap* checksum_to_function);
-  static void AddKnownNote(u32 start_addr, u32 size, const std::string& name, XNoteMap* notes);
-
-  static void DetermineNoteLayers(XNoteMap* notes);
-  static void FillInCallers(XFuncMap* functions);
+                             Common::Symbol::Type type, XFuncMap* functions);
 };

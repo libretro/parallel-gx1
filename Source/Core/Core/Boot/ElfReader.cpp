@@ -238,7 +238,7 @@ SectionID ElfReader::GetSectionByName(const char* name, int firstSection) const
   return -1;
 }
 
-bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const
+bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db) const
 {
   if (!m_is_valid)
     return false;
@@ -304,11 +304,10 @@ bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) co
       default:
         continue;
       }
-      ppc_symbol_db.AddKnownSymbol(value, size, name, filename, symtype);
+      ppc_symbol_db.AddKnownSymbol(value, size, name, symtype);
       hasSymbols = true;
     }
   }
-  ppc_symbol_db.Index();
   return hasSymbols;
 }
 

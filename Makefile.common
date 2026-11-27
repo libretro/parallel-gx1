@@ -873,7 +873,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/PPCCache.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/PPCSymbolDB.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/PPCTables.cpp \
-	$(CORE_DIR)/Source/Core/Core/PowerPC/SignatureDB/SignatureDB.cpp \
 	$(CORE_DIR)/Source/Core/Core/State.cpp \
 	$(CORE_DIR)/Source/Core/Core/SysConf.cpp \
 	$(CORE_DIR)/Source/Core/Core/System.cpp \

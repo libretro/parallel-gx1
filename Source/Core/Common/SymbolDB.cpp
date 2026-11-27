@@ -3,7 +3,6 @@
 
 #include "Common/SymbolDB.h"
 
-#include <cinttypes>
 #include <cstring>
 #include <map>
 #include <string>
@@ -33,47 +32,19 @@ void Symbol::Rename(const std::string& symbol_name)
   this->function_name = GetStrippedFunctionName(symbol_name);
 }
 
-void SymbolDB::List()
-{
-  for (const auto& func : m_functions)
-  {
-    DEBUG_LOG(OSHLE, "%s @ %08x: %u bytes (hash %08x) : %d calls", func.second.name.c_str(),
-              func.second.address, func.second.size, func.second.hash, func.second.num_calls);
-  }
-  INFO_LOG(OSHLE, "%" PRIu64 " functions known in this program above.", (u64)m_functions.size());
-}
-
 bool SymbolDB::IsEmpty() const
 {
-  return m_functions.empty() && m_notes.empty();
+  return m_functions.empty();
 }
 
-bool SymbolDB::Clear(const char* prefix)
+bool SymbolDB::Clear()
 {
-
-  // TODO: honor prefix
   m_map_name.clear();
   if (IsEmpty())
     return false;
 
   m_functions.clear();
-  m_notes.clear();
-  m_checksum_to_function.clear();
   return true;
-}
-
-void SymbolDB::Index()
-{
-  Index(&m_functions);
-}
-
-void SymbolDB::Index(XFuncMap* functions)
-{
-  int i = 0;
-  for (auto& func : *functions)
-  {
-    func.second.index = i++;
-  }
 }
 
 std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) const
@@ -87,30 +58,6 @@ std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) c
   }
 
   return symbols;
-}
-
-bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name)
-{
-
-  auto it = m_functions.find(symbol.address);
-  if (it == m_functions.end())
-    return false;
-
-  it->second.Rename(symbol_name);
-  return true;
-}
-
-bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name,
-                            const std::string& object_name)
-{
-
-  auto it = m_functions.find(symbol.address);
-  if (it == m_functions.end())
-    return false;
-
-  it->second.Rename(symbol_name);
-  it->second.object_name = object_name;
-  return true;
 }
 
 }  // namespace Common

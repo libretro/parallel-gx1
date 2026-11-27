@@ -6,6 +6,7 @@
 #include <string>
 
 #include <cstdio>
+#include <cstring>
 
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
@@ -25,6 +26,13 @@ static bool IsStackBottom(u32 addr)
   return !addr || !PowerPC::MMU::HostIsRAMAddress(addr);
 }
 
+// The name of the symbol holding addr, or " --- "
+static const char* GetDescription(const PPCSymbolDB& ppc_symbol_db, u32 addr)
+{
+  const Common::Symbol* const symbol = ppc_symbol_db.GetSymbolFromAddr(addr);
+  return symbol ? symbol->name.c_str() : " --- ";
+}
+
 void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
 {
   auto& power_pc = Core::System::GetInstance().GetPowerPC();
@@ -38,10 +46,10 @@ void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
     GENERIC_LOG(type, level, " LR = 0 - this is bad");
   }
 
-  if (const std::string lr_desc = ppc_symbol_db.GetDescription(LR(ppc_state));
-      lr_desc != ppc_symbol_db.GetDescription(ppc_state.pc))
+  if (const char* const lr_desc = GetDescription(ppc_symbol_db, LR(ppc_state));
+      std::strcmp(lr_desc, GetDescription(ppc_symbol_db, ppc_state.pc)) != 0)
   {
-    GENERIC_LOG(type, level, " * %s  [ LR = %08x ]", lr_desc.c_str(), LR(ppc_state));
+    GENERIC_LOG(type, level, " * %s  [ LR = %08x ]", lr_desc, LR(ppc_state));
   }
 
   if (IsStackBottom(ppc_state.gpr[1]))
@@ -53,10 +61,10 @@ void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
   for (int count = 0; !IsStackBottom(addr + 4) && (count < 20); ++count)
   {
     const u32 func_addr = PowerPC::MMU::HostRead<u32>(addr + 4);
-    std::string func_desc = ppc_symbol_db.GetDescription(func_addr);
-    if (func_desc.empty() || func_desc == "Invalid")
+    const char* func_desc = GetDescription(ppc_symbol_db, func_addr);
+    if (!*func_desc || !std::strcmp(func_desc, "Invalid"))
       func_desc = "(unknown)";
-    GENERIC_LOG(type, level, " * %s [ addr = %08x ]", func_desc.c_str(), func_addr);
+    GENERIC_LOG(type, level, " * %s [ addr = %08x ]", func_desc, func_addr);
 
     if (IsStackBottom(addr))
       break;

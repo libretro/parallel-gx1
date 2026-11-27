@@ -671,24 +671,10 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 
       ppc_state.pc = executable.reader->GetEntryPoint();
 
-      // the file name without its directories
-      const char* filename = executable.path;
-      for (const char* c = executable.path; *c; c++)
-      {
-        if (*c == '/'
-#ifdef _WIN32
-            || *c == ':'
-#endif
-        )
-        {
-          filename = c + 1;
-        }
-      }
-
       auto& ppc_symbol_db = system.GetPPCSymbolDB();
       ppc_symbol_db.Clear();
 
-      if (executable.reader->LoadSymbols(ppc_symbol_db, filename))
+      if (executable.reader->LoadSymbols(ppc_symbol_db))
         HLE::PatchFunctions(system);
 
       return true;
@@ -814,10 +800,10 @@ bool BootExecutableReader::LoadIntoMemory(Core::System& system, bool only_in_mem
 }
 
 // A DOL carries no symbols
-bool BootExecutableReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const char* filename) const
+bool BootExecutableReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db) const
 {
   if (executable_kind == BootExecutableKind::Elf)
-    return static_cast<const ElfReader*>(this)->LoadSymbols(ppc_symbol_db, filename);
+    return static_cast<const ElfReader*>(this)->LoadSymbols(ppc_symbol_db);
   return false;
 }
 
