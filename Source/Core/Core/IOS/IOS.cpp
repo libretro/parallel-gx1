@@ -443,7 +443,9 @@ static u8* ReadBootContent(FSCore& fs, const char* path, size_t max_size, size_t
   if (fd.Get() < 0)
     return nullptr;
 
-  const size_t file_size = fs.GetFileStatus(fd.Get(), ticks)->size;
+  HLE::FS::FileStatus status{};
+  fs.GetFileStatus(fd.Get(), &status, ticks);
+  const size_t file_size = status.size;
   if (!file_size || (max_size != 0 && file_size > max_size))
     return nullptr;
 

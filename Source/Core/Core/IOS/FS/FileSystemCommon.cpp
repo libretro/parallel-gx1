@@ -105,14 +105,17 @@ Fd FileHandle::Release()
   return m_fd;
 }
 
-Result<u32> FileHandle::Seek(u32 offset, SeekMode mode) const
+bool FileHandle::Seek(u32 offset, SeekMode mode) const
 {
-  return m_fs->SeekFile(m_fd, offset, mode);
+  u32 new_offset;
+  return m_fs->SeekFile(m_fd, offset, mode, &new_offset) == ResultCode::Success;
 }
 
-Result<FileStatus> FileHandle::GetStatus() const
+u32 FileHandle::GetSize() const
 {
-  return m_fs->GetFileStatus(m_fd);
+  FileStatus status{};
+  m_fs->GetFileStatus(m_fd, &status);
+  return status.size;
 }
 
 Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes)
@@ -283,18 +286,20 @@ void FileSystem::DoStateRead(PointerWrap& p, const char* directory_path, u8* buf
         const u32 bytes_to_write = std::min(child_metadata.size - i, STATE_CHUNK_SIZE);
         p.DoArray(buffer, bytes_to_write);
 
-        Result<size_t> write_result = handle->Write(buffer, bytes_to_write);
-        if (!write_result)
+        u32 written = 0;
+        const ResultCode write_result =
+            WriteBytesToFile(handle->Get(), buffer, bytes_to_write, &written);
+        if (write_result != ResultCode::Success)
         {
           ERROR_LOG(IOS_FS, "DoStateRead failed to call Write for %s: %u", child_path,
-                    static_cast<unsigned>(write_result.error()));
+                    static_cast<unsigned>(write_result));
           p.SetVerifyMode();
           break;
         }
-        if (*write_result != bytes_to_write)
+        if (written != bytes_to_write)
         {
           ERROR_LOG(IOS_FS, "DoStateRead tried to write %s bytes to %u but wrote %" PRIu64 " bytes",
-                    child_path, bytes_to_write, (u64)(*write_result));
+                    child_path, bytes_to_write, (u64)written);
           p.SetVerifyMode();
           break;
         }
@@ -378,20 +383,22 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_pat
       while (i < child_metadata.size)
       {
         const u32 bytes_to_read = std::min(child_metadata.size - i, STATE_CHUNK_SIZE);
-        Result<size_t> read_result = handle->Read(buffer, bytes_to_read);
-        if (!read_result)
+        u32 read = 0;
+        const ResultCode read_result =
+            ReadBytesFromFile(handle->Get(), buffer, bytes_to_read, &read);
+        if (read_result != ResultCode::Success)
         {
           ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u", child_name,
-                    static_cast<unsigned>(read_result.error()));
+                    static_cast<unsigned>(read_result));
           p.SetVerifyMode();
           break;
         }
-        if (*read_result != bytes_to_read)
+        if (read != bytes_to_read)
         {
           ERROR_LOG(IOS_FS,
                     "DoStateWriteOrMeasure tried to read %s bytes from %u but got %" PRIu64
                     " bytes",
-                    child_name, bytes_to_read, (u64)(*read_result));
+                    child_name, bytes_to_read, (u64)read);
           p.SetVerifyMode();
           break;
         }

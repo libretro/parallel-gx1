@@ -163,15 +163,15 @@ ResultCode FileSystem::Close(Fd fd)
   return ResultCode::Success;
 }
 
-Result<u32> FileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
+ResultCode FileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count, u32* bytes_read)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
   if (!host_file || !host_file->IsOpen())
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   if ((u8(handle->mode) & u8(Mode::Read)) == 0)
-    return std::unexpected{ResultCode::AccessDenied};
+    return ResultCode::AccessDenied;
 
   const u32 file_size = static_cast<u32>(host_file->GetSize());
   // IOS has this check in the read request handler: a read stops at the end of the file. What is
@@ -189,39 +189,41 @@ Result<u32> FileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
   host_file->ReadArray(ptr, count, &actually_read);
   host_file->ClearError();
   if (actually_read != count)
-    return std::unexpected{ResultCode::AccessDenied};
+    return ResultCode::AccessDenied;
 
   // IOS returns the number of bytes read and adds that value to the seek position,
   // instead of adding the *requested* read length.
   handle->file_offset += u32(actually_read);
-  return u32(actually_read);
+  *bytes_read = u32(actually_read);
+  return ResultCode::Success;
 }
 
-Result<u32> FileSystem::WriteBytesToFile(Fd fd, const u8* ptr, u32 count)
+ResultCode FileSystem::WriteBytesToFile(Fd fd, const u8* ptr, u32 count, u32* bytes_written)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
   if (!host_file || !host_file->IsOpen())
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   if ((u8(handle->mode) & u8(Mode::Write)) == 0)
-    return std::unexpected{ResultCode::AccessDenied};
+    return ResultCode::AccessDenied;
 
   // File might be opened twice, need to seek before we read
   host_file->Seek(handle->file_offset, File::SeekOrigin::Begin);
   if (!host_file->WriteBytes(ptr, count))
-    return std::unexpected{ResultCode::AccessDenied};
+    return ResultCode::AccessDenied;
 
   handle->file_offset += count;
-  return count;
+  *bytes_written = count;
+  return ResultCode::Success;
 }
 
-Result<u32> FileSystem::SeekFile(Fd fd, std::uint32_t offset, SeekMode mode)
+ResultCode FileSystem::SeekFile(Fd fd, u32 offset, SeekMode mode, u32* new_offset)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
   if (!host_file || !host_file->IsOpen())
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   u32 new_position = 0;
   switch (mode)
@@ -236,28 +238,28 @@ Result<u32> FileSystem::SeekFile(Fd fd, std::uint32_t offset, SeekMode mode)
     new_position = host_file->GetSize() + offset;
     break;
   default:
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
   }
 
   // This differs from POSIX behaviour which allows seeking past the end of the file.
   if (host_file->GetSize() < new_position)
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
   handle->file_offset = new_position;
-  return handle->file_offset;
+  *new_offset = new_position;
+  return ResultCode::Success;
 }
 
-Result<FileStatus> FileSystem::GetFileStatus(Fd fd)
+ResultCode FileSystem::GetFileStatus(Fd fd, FileStatus* out)
 {
   const Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
   if (!host_file || !host_file->IsOpen())
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
-  FileStatus status;
-  status.size = host_file->GetSize();
-  status.offset = handle->file_offset;
-  return status;
+  out->size = host_file->GetSize();
+  out->offset = handle->file_offset;
+  return ResultCode::Success;
 }
 
 FileSystem::Handle* FileSystem::AssignFreeHandle()

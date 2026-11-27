@@ -71,7 +71,7 @@ public:
   s32 WriteForIPC(u64 fd, const u8* data, u32 size, u32 ipc_buffer_addr, Ticks ticks = {});
   s32 Seek(u64 fd, u32 offset, FS::SeekMode mode, Ticks ticks = {});
 
-  FS::Result<FS::FileStatus> GetFileStatus(u64 fd, Ticks ticks = {});
+  FS::ResultCode GetFileStatus(u64 fd, FS::FileStatus* out, Ticks ticks = {});
   FS::ResultCode RenameFile(FS::Uid uid, FS::Gid gid, const char* old_path, const char* new_path,
                             Ticks ticks = {});
   FS::ResultCode DeleteFile(FS::Uid uid, FS::Gid gid, const char* path, Ticks ticks = {});

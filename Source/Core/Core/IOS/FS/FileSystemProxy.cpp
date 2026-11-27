@@ -402,11 +402,12 @@ u64 FSCore::EstimateTicksForReadWrite(const Handle& handle, u64 fd, IPCCommandTy
   u64 ticks = 0;
 
   const bool is_write = command == IPC_CMD_WRITE;
-  const Result<FileStatus> status = m_ios.GetFS()->GetFileStatus(handle.fs_fd);
-  u32 offset = status->offset;
+  FileStatus status{};
+  m_ios.GetFS()->GetFileStatus(handle.fs_fd, &status);
+  u32 offset = status.offset;
   u32 count = size;
-  if (!is_write && count + offset > status->size)
-    count = status->size - offset;
+  if (!is_write && count + offset > status.size)
+    count = status.size - offset;
 
   while (count != 0)
   {
@@ -422,7 +423,7 @@ u64 FSCore::EstimateTicksForReadWrite(const Handle& handle, u64 fd, IPCCommandTy
     }
     else
     {
-      ticks += SimulatePopulateFileCache(fd, offset, status->size);
+      ticks += SimulatePopulateFileCache(fd, offset, status.size);
 
       const u32 start = offset - m_cache_chain_index * CLUSTER_DATA_SIZE;
       copy_length = std::min<u32>(CLUSTER_DATA_SIZE - start, count);
@@ -484,14 +485,15 @@ s32 FSCore::DoRead(u64 fd, u8* data, u32 size, bool from_ipc, u32 ipc_buffer_add
   // Simulate the FS read logic to estimate ticks. Note: this must be done before reading.
   ticks.Add(EstimateTicksForReadWrite(handle, fd, IPC_CMD_READ, size));
 
-  const Result<u32> result = m_ios.GetFS()->ReadBytesFromFile(handle.fs_fd, data, size);
+  u32 bytes = 0;
+  const ResultCode result = m_ios.GetFS()->ReadBytesFromFile(handle.fs_fd, data, size, &bytes);
   if (from_ipc)
-    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
+    LogResult(result, "Read(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
 
-  if (!result)
-    return ConvertResult(result.error());
+  if (result != ResultCode::Success)
+    return ConvertResult(result);
 
-  return *result;
+  return bytes;
 }
 
 IPCReply FSDevice::Write(const ReadWriteRequest& request)
@@ -529,14 +531,15 @@ s32 FSCore::DoWrite(u64 fd, const u8* data, u32 size, bool from_ipc, u32 ipc_buf
   // Simulate the FS write logic to estimate ticks. Must be done before writing.
   ticks.Add(EstimateTicksForReadWrite(handle, fd, IPC_CMD_WRITE, size));
 
-  const Result<u32> result = m_ios.GetFS()->WriteBytesToFile(handle.fs_fd, data, size);
+  u32 bytes = 0;
+  const ResultCode result = m_ios.GetFS()->WriteBytesToFile(handle.fs_fd, data, size, &bytes);
   if (from_ipc)
-    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
+    LogResult(result, "Write(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
 
-  if (!result)
-    return ConvertResult(result.error());
+  if (result != ResultCode::Success)
+    return ConvertResult(result);
 
-  return *result;
+  return bytes;
 }
 
 IPCReply FSDevice::Seek(const SeekRequest& request)
@@ -554,11 +557,12 @@ s32 FSCore::Seek(u64 fd, u32 offset, FS::SeekMode mode, Ticks ticks)
   if (handle.fs_fd == INVALID_FD)
     return ConvertResult(ResultCode::Invalid);
 
-  const Result<u32> result = m_ios.GetFS()->SeekFile(handle.fs_fd, offset, mode);
-  LogResult(CodeOf(result), "Seek(%s, 0x%08x, %d)", handle.name, offset, static_cast<int>(mode));
-  if (!result)
-    return ConvertResult(result.error());
-  return *result;
+  u32 new_offset = 0;
+  const ResultCode result = m_ios.GetFS()->SeekFile(handle.fs_fd, offset, mode, &new_offset);
+  LogResult(result, "Seek(%s, 0x%08x, %d)", handle.name, offset, static_cast<int>(mode));
+  if (result != ResultCode::Success)
+    return ConvertResult(result);
+  return new_offset;
 }
 
 #pragma pack(push, 1)
@@ -894,31 +898,32 @@ IPCReply FSDevice::GetFileStats(const Handle& handle, const IOCtlRequest& reques
     return GetFSReply(ConvertResult(ResultCode::Invalid));
 
   return MakeIPCReply([&](Ticks ticks) {
-    const Result<FileStatus> status = m_core.GetFileStatus(request.fd, ticks);
-    if (!status)
-      return ConvertResult(status.error());
+    FileStatus status;
+    const ResultCode result = m_core.GetFileStatus(request.fd, &status, ticks);
+    if (result != ResultCode::Success)
+      return ConvertResult(result);
 
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
 
     ISFSFileStats out;
-    out.size = status->size;
-    out.seek_position = status->offset;
+    out.size = status.size;
+    out.seek_position = status.offset;
     memory.CopyToEmu(request.buffer_out, &out, sizeof(out));
     return IPC_SUCCESS;
   });
 }
 
-FS::Result<FS::FileStatus> FSCore::GetFileStatus(u64 fd, Ticks ticks)
+FS::ResultCode FSCore::GetFileStatus(u64 fd, FS::FileStatus* out, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
   const Handle& handle = GetHandle(fd);
   if (handle.fs_fd == INVALID_FD)
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
-  auto status = m_ios.GetFS()->GetFileStatus(handle.fs_fd);
-  LogResult(CodeOf(status), "GetFileStatus(%s)", handle.name);
-  return status;
+  const ResultCode result = m_ios.GetFS()->GetFileStatus(handle.fs_fd, out);
+  LogResult(result, "GetFileStatus(%s)", handle.name);
+  return result;
 }
 
 IPCReply FSDevice::GetUsage(const Handle& handle, const IOCtlVRequest& request)

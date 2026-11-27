@@ -28,7 +28,9 @@ static ES::TMDReader FindTMD(FSCore& fs, const char* tmd_path, Ticks ticks)
     return {};
 
   // read straight into the reader
-  const u32 size = fs.GetFileStatus(fd.Get(), ticks)->size;
+  FS::FileStatus status{};
+  fs.GetFileStatus(fd.Get(), &status, ticks);
+  const u32 size = status.size;
   ES::TMDReader tmd;
   u8* const bytes = tmd.ResizeBytes(size);
   if (size && (!bytes || !fs.Read(fd.Get(), bytes, size, ticks)))
@@ -75,7 +77,7 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) con
   }
 
   // read straight into the reader
-  const u32 size = ticket_file->GetStatus()->size;
+  const u32 size = ticket_file->GetSize();
   ES::TicketReader ticket;
   u8* const bytes = ticket.ResizeBytes(size);
   if (size && (!bytes || !ticket_file->Read(bytes, size)))
@@ -269,7 +271,7 @@ bool ESCore::IsContentStored(const ES::TMDReader& tmd, const ES::Content& conten
   u8 digest[20];
   u8 chunk[2048];
   sha1_stream_init(&sha1);
-  u32 left = file->GetStatus()->size;
+  u32 left = file->GetSize();
   bool ok = true;
   while (left)
   {

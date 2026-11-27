@@ -59,7 +59,7 @@ void SysConf::Load()
 
   const auto file = m_fs->OpenFile(IOS::HLE::FS::Uid{0}, IOS::HLE::FS::Gid{0},
                                    "/shared2/sys/SYSCONF", IOS::HLE::FS::Mode::Read);
-  if (!file || file->GetStatus()->size != SYSCONF_SIZE || !LoadFromFile(*file))
+  if (!file || file->GetSize() != SYSCONF_SIZE || !LoadFromFile(*file))
   {
     WARN_LOG(CORE, "No valid SYSCONF detected. Creating a new one.");
     InsertDefaultEntries();

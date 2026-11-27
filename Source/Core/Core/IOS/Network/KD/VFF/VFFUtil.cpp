@@ -160,8 +160,7 @@ static DRESULT vff_write(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, const BYTE* b
   }
 
   const size_t size = static_cast<size_t>(count) * IOS::HLE::NWC24::SECTOR_SIZE;
-  const auto res = vff->Write(buff, size);
-  if (!res)
+  if (!vff->Write(buff, size))
   {
     ERROR_LOG(IOS_WC24, "VFF write failed (offset=%" PRIu64 ", size=%" PRIu64 ")", (u64)offset,
               (u64)size);
@@ -178,7 +177,7 @@ static DRESULT vff_ioctl(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, BYTE cmd, voi
   case CTRL_SYNC:
     return RES_OK;
   case GET_SECTOR_COUNT:
-    *static_cast<LBA_t*>(buff) = vff->GetStatus()->size / IOS::HLE::NWC24::SECTOR_SIZE;
+    *static_cast<LBA_t*>(buff) = vff->GetSize() / IOS::HLE::NWC24::SECTOR_SIZE;
     return RES_OK;
   default:
     WARN_LOG(IOS_WC24, "Unexpected FAT ioctl %u", (unsigned)cmd);

@@ -41,7 +41,6 @@ enum class ResultCode
   FileNotEmpty,
   CheckFailed,
   UnknownError,
-  ShortRead,
 };
 
 template <typename T>
@@ -191,15 +190,18 @@ public:
 
   /// Release the FD so that it is not automatically closed.
   Fd Release();
+  Fd Get() const { return m_fd; }
 
+  /// Whether all count elements were read or written
   template <typename T>
-  Result<size_t> Read(T* ptr, size_t count) const;
-
+  bool Read(T* ptr, size_t count) const;
   template <typename T>
-  Result<size_t> Write(const T* ptr, size_t count) const;
+  bool Write(const T* ptr, size_t count) const;
 
-  Result<u32> Seek(u32 offset, SeekMode mode) const;
-  Result<FileStatus> GetStatus() const;
+  /// Whether the file offset moved
+  bool Seek(u32 offset, SeekMode mode) const;
+  /// The file's size, which a valid handle always has
+  u32 GetSize() const;
 
 private:
   FileSystem* m_fs;
@@ -228,15 +230,15 @@ public:
   Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes);
   /// Close a file descriptor.
   ResultCode Close(Fd fd);
-  /// Read `size` bytes from the file descriptor. Returns the number of bytes read.
-  Result<u32> ReadBytesFromFile(Fd fd, u8* ptr, u32 size);
-  /// Write `size` bytes to the file descriptor. Returns the number of bytes written.
-  Result<u32> WriteBytesToFile(Fd fd, const u8* ptr, u32 size);
-  /// Reposition the file offset for a file descriptor.
-  Result<u32> SeekFile(Fd fd, u32 offset, SeekMode mode);
-  /// Get status for a file descriptor.
+  /// Read `size` bytes from the file descriptor, giving the number of bytes read.
+  ResultCode ReadBytesFromFile(Fd fd, u8* ptr, u32 size, u32* bytes_read);
+  /// Write `size` bytes to the file descriptor, giving the number of bytes written.
+  ResultCode WriteBytesToFile(Fd fd, const u8* ptr, u32 size, u32* bytes_written);
+  /// Reposition the file offset for a file descriptor, giving the new offset.
+  ResultCode SeekFile(Fd fd, u32 offset, SeekMode mode, u32* new_offset);
+  /// Get status for a file descriptor into out, which is left alone on failure.
   /// Guaranteed to succeed for a valid file descriptor.
-  Result<FileStatus> GetFileStatus(Fd fd);
+  ResultCode GetFileStatus(Fd fd, FileStatus* out);
 
   /// Create a file with the specified path and metadata.
   ResultCode CreateFile(Uid caller_uid, Gid caller_gid, const char* path, FileAttribute attribute,
@@ -374,25 +376,21 @@ private:
 };
 
 template <typename T>
-Result<size_t> FileHandle::Read(T* ptr, size_t count) const
+bool FileHandle::Read(T* ptr, size_t count) const
 {
-  const Result<u32> bytes = m_fs->ReadBytesFromFile(m_fd, reinterpret_cast<u8*>(ptr),
-                                                    static_cast<u32>(sizeof(T) * count));
-  if (!bytes)
-    return bytes;
-  if (*bytes != sizeof(T) * count)
-    return std::unexpected{ResultCode::ShortRead};
-  return count;
+  const u32 size = static_cast<u32>(sizeof(T) * count);
+  u32 bytes = 0;
+  return m_fs->ReadBytesFromFile(m_fd, reinterpret_cast<u8*>(ptr), size, &bytes) ==
+             ResultCode::Success &&
+         bytes == size;
 }
 
 template <typename T>
-Result<size_t> FileHandle::Write(const T* ptr, size_t count) const
+bool FileHandle::Write(const T* ptr, size_t count) const
 {
-  const auto result = m_fs->WriteBytesToFile(m_fd, reinterpret_cast<const u8*>(ptr),
-                                             static_cast<u32>(sizeof(T) * count));
-  if (!result)
-    return result;
-  return count;
+  u32 bytes = 0;
+  return m_fs->WriteBytesToFile(m_fd, reinterpret_cast<const u8*>(ptr),
+                                static_cast<u32>(sizeof(T) * count), &bytes) == ResultCode::Success;
 }
 
 enum class Location

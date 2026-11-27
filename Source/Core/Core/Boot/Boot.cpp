@@ -874,7 +874,7 @@ void UpdateStateFlags(void (*update_function)(StateFlags*))
     return;
 
   StateFlags state{};
-  if (file->GetStatus()->size == sizeof(StateFlags))
+  if (file->GetSize() == sizeof(StateFlags))
     (void)file->Read(&state, 1);
 
   update_function(&state);

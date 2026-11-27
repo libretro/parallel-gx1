@@ -160,7 +160,7 @@ void ESDevice::FinishInit()
     const auto launch_file = GetEmulationKernel().GetFS()->OpenFile(
         PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, FS::Mode::Read);
     if (launch_file)
-      has_pending_launch = launch_file->Read(&pending_launch_title_id, 1).has_value();
+      has_pending_launch = launch_file->Read(&pending_launch_title_id, 1);
   }
 
   if (has_pending_launch)
@@ -1105,7 +1105,7 @@ ReturnCode ESCore::ReadCertStore(u8** bytes, size_t* size) const
   if (!store_file)
     return FS::ConvertResult(store_file.error());
 
-  const u32 store_size = store_file->GetStatus()->size;
+  const u32 store_size = store_file->GetSize();
   u8* const store = static_cast<u8*>(std::malloc(store_size ? store_size : 1));
   if (!store)
     return ES_SHORT_READ;

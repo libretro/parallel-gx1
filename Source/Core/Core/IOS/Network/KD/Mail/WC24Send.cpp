@@ -54,7 +54,7 @@ bool WC24SendList::ReadSendList()
     return false;
   }
 
-  if (file->GetStatus()->size != SEND_LIST_SIZE)
+  if (file->GetSize() != SEND_LIST_SIZE)
   {
     ERROR_LOG(IOS_WC24, "The WC24 Send list file is not the correct size.");
     return false;
