@@ -186,10 +186,12 @@ public:
       inis[system.first].Load(File::GetUserPath(system.second));
     }
 
-    for (const auto& config : layer->GetLayerMap())
+    const Config::LayerEntry* const entries = layer->GetEntries();
+    for (u32 entry_index = 0; entry_index < layer->GetEntryCount(); entry_index++)
     {
-      const Config::Location& location = config.first;
-      const std::optional<std::string>& value = config.second;
+      const Config::LayerEntry& entry = entries[entry_index];
+      const Config::Location location{entry.system, entry.section, entry.key};
+      const char* const value = entry.value;
 
       // Done by SaveToSYSCONF
       if (location.system == Config::System::SYSCONF)
@@ -215,7 +217,7 @@ public:
       if (value)
       {
         auto* ini_section = ini->second.GetOrCreateSection(location.section);
-        ini_section->Set(location.key, *value);
+        ini_section->Set(location.key, std::string(value));
       }
       else
       {

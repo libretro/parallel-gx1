@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <map>
-#include <memory>
-#include <optional>
 #include <string>
 #include <type_traits>
 
@@ -26,7 +23,7 @@ namespace detail
 // Each false, leaving out alone, when str_value does not parse as a T
 template <typename T>
 requires(!Common::Enum<T>)
-bool TryParse(const std::string& str_value, T* out)
+bool TryParse(const char* str_value, T* out)
 {
   T value;
   if (!::TryParse(str_value, &value))
@@ -36,7 +33,7 @@ bool TryParse(const std::string& str_value, T* out)
 }
 
 template <Common::Enum T>
-bool TryParse(const std::string& str_value, T* out)
+bool TryParse(const char* str_value, T* out)
 {
   std::underlying_type_t<T> value;
   if (!TryParse<std::underlying_type_t<T>>(str_value, &value))
@@ -46,7 +43,7 @@ bool TryParse(const std::string& str_value, T* out)
 }
 
 template <>
-inline bool TryParse(const std::string& str_value, std::string* out)
+inline bool TryParse(const char* str_value, std::string* out)
 {
   *out = str_value;
   return true;
@@ -57,7 +54,15 @@ template <typename T>
 class Info;
 
 class Layer;
-using LayerMap = std::map<Location, std::optional<std::string>>;
+
+// A key a layer has seen, with its value, or none once deleted. The strings are owned.
+struct LayerEntry
+{
+  System system;
+  char* section;
+  char* key;
+  char* value;  // null once the key is deleted
+};
 
 class ConfigLayerLoader
 {
@@ -71,32 +76,6 @@ public:
 
 private:
   const LayerType m_layer;
-};
-
-class Section
-{
-public:
-  using iterator = LayerMap::iterator;
-  Section(iterator begin_, iterator end_) : m_begin(begin_), m_end(end_) {}
-  iterator begin() const { return m_begin; }
-  iterator end() const { return m_end; }
-
-private:
-  iterator m_begin;
-  iterator m_end;
-};
-
-class ConstSection
-{
-public:
-  using iterator = LayerMap::const_iterator;
-  ConstSection(iterator begin_, iterator end_) : m_begin(begin_), m_end(end_) {}
-  iterator begin() const { return m_begin; }
-  iterator end() const { return m_end; }
-
-private:
-  iterator m_begin;
-  iterator m_end;
 };
 
 class Layer final
@@ -122,10 +101,10 @@ public:
   template <typename T>
   bool Get(const Location& location, T* out) const
   {
-    const auto iter = m_map.find(location);
-    if (iter == m_map.end() || !iter->second.has_value())
+    const LayerEntry* const entry = FindEntry(location);
+    if (!entry || !entry->value)
       return false;
-    return detail::TryParse<T>(*iter->second, out);
+    return detail::TryParse<T>(entry->value, out);
   }
 
   template <typename T>
@@ -145,34 +124,37 @@ public:
   template <typename T>
   bool Set(const Location& location, const T& value)
   {
-    return Set(location, ValueToString(value));
+    return Set(location, ValueToString(value).c_str());
   }
 
-  bool Set(const Location& location, std::string new_value)
+  bool Set(const Location& location, const std::string& new_value)
   {
-    const auto iter = m_map.find(location);
-    if (iter != m_map.end() && iter->second == new_value)
-      return false;
-    m_is_dirty = true;
-    m_map.insert_or_assign(location, std::move(new_value));
-    return true;
+    return Set(location, new_value.c_str());
   }
+
+  // Whether the value changed
+  bool Set(const Location& location, const char* new_value);
 
   void MarkAsDirty() { m_is_dirty = true; }
-
-  Section GetSection(System system, const std::string& section);
-  ConstSection GetSection(System system, const std::string& section) const;
 
   // Explicit load and save of layers
   void Load();
   void Save();
 
   LayerType GetLayer() const;
-  const LayerMap& GetLayerMap() const;
+  // The keys the layer has seen, sorted by system, then section and key ignoring case
+  const LayerEntry* GetEntries() const { return m_entries; }
+  u32 GetEntryCount() const { return m_entry_count; }
 
 private:
+  // Where the entry for location is, or would be put; *found tells which
+  u32 LowerBound(const Location& location, bool* found) const;
+  const LayerEntry* FindEntry(const Location& location) const;
+
   bool m_is_dirty = false;
-  LayerMap m_map;
+  LayerEntry* m_entries = nullptr;
+  u32 m_entry_count = 0;
+  u32 m_entry_capacity = 0;
   const LayerType m_layer;
   ConfigLayerLoader* m_loader = nullptr;  // owned
 };

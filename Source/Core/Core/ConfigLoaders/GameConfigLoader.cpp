@@ -299,8 +299,12 @@ void INIGameConfigLayerLoader::Save(Config::Layer* layer)
   for (const std::string& file_name : GetGameIniFilenames(m_id, m_revision))
     ini.Load(File::GetUserPath(D_GAMESETTINGS_IDX) + file_name, true);
 
-  for (const auto& [location, value] : layer->GetLayerMap())
+  const Config::LayerEntry* const entries = layer->GetEntries();
+  for (u32 entry_index = 0; entry_index < layer->GetEntryCount(); entry_index++)
   {
+    const Config::LayerEntry& entry = entries[entry_index];
+    const Config::Location location{entry.system, entry.section, entry.key};
+    const char* const value = entry.value;
     if (!IsSettingSaveable(location) || location.system == Config::System::Session)
       continue;
 
@@ -311,7 +315,7 @@ void INIGameConfigLayerLoader::Save(Config::Layer* layer)
     if (value)
     {
       auto* ini_section = ini.GetOrCreateSection(ini_location.section);
-      ini_section->Set(ini_location.key, *value);
+      ini_section->Set(ini_location.key, std::string(value));
     }
     else
     {

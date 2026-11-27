@@ -110,7 +110,7 @@ T GetUncached(const Info<T>& info)
     return info.GetDefaultValue();
 
   T value;
-  if (!detail::TryParse<T>(str, &value))
+  if (!detail::TryParse<T>(str.c_str(), &value))
     return info.GetDefaultValue();
   return value;
 }
