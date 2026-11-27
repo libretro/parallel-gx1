@@ -212,7 +212,7 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, char* host_path, size_t hos
 
     const auto nand_file =
         fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path, public_modes);
-    if (!nand_file || !nand_file->Write(data, size))
+    if (!nand_file || !nand_file.Write(data, size))
       ok = false;
     std::free(file_data);
   }

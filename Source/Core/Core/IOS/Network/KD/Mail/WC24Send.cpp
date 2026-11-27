@@ -48,13 +48,13 @@ WC24SendList::WC24SendList(FS::FileSystem* fs) : m_fs{fs}
 bool WC24SendList::ReadSendList()
 {
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, SEND_LIST_PATH, FS::Mode::Read);
-  if (!file || !file->Read(&m_data, 1))
+  if (!file || !file.Read(&m_data, 1))
   {
     ERROR_LOG(IOS_WC24, "Failed to read the Send list");
     return false;
   }
 
-  if (file->GetSize() != SEND_LIST_SIZE)
+  if (file.GetSize() != SEND_LIST_SIZE)
   {
     ERROR_LOG(IOS_WC24, "The WC24 Send list file is not the correct size.");
     return false;
@@ -96,7 +96,7 @@ void WC24SendList::WriteSendList() const
   m_fs->CreateFullPath(PID_KD, PID_KD, SEND_LIST_PATH, 0, public_modes);
   const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, SEND_LIST_PATH, public_modes);
 
-  if (!file || !file->Write(&m_data, 1))
+  if (!file || !file.Write(&m_data, 1))
     ERROR_LOG(IOS_WC24, "Failed to open or write WC24 Send list file");
 }
 

@@ -874,14 +874,14 @@ void UpdateStateFlags(void (*update_function)(StateFlags*))
     return;
 
   StateFlags state{};
-  if (file->GetSize() == sizeof(StateFlags))
-    (void)file->Read(&state, 1);
+  if (file.GetSize() == sizeof(StateFlags))
+    (void)file.Read(&state, 1);
 
   update_function(&state);
   state.UpdateChecksum();
 
-  (void)file->Seek(0, IOS::HLE::FS::SeekMode::Set);
-  (void)file->Write(&state, 1);
+  (void)file.Seek(0, IOS::HLE::FS::SeekMode::Set);
+  (void)file.Write(&state, 1);
 }
 
 void CreateSystemMenuTitleDirs()

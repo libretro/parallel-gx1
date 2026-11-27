@@ -160,7 +160,7 @@ void ESDevice::FinishInit()
     const auto launch_file = GetEmulationKernel().GetFS()->OpenFile(
         PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, FS::Mode::Read);
     if (launch_file)
-      has_pending_launch = launch_file->Read(&pending_launch_title_id, 1);
+      has_pending_launch = launch_file.Read(&pending_launch_title_id, 1);
   }
 
   if (has_pending_launch)
@@ -856,10 +856,10 @@ static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& t
     const auto file =
         fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), internal_modes);
     if (!file)
-      return FS::ConvertResult(file.error());
+      return FS::ConvertResult(file.GetError());
     size_t tmd_size;
     const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
-    if (!file->Write(tmd_bytes, tmd_size))
+    if (!file.Write(tmd_bytes, tmd_size))
       return ES_EIO;
   }
 
@@ -1103,13 +1103,13 @@ ReturnCode ESCore::ReadCertStore(u8** bytes, size_t* size) const
   const auto store_file =
       m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH.c_str(), FS::Mode::Read);
   if (!store_file)
-    return FS::ConvertResult(store_file.error());
+    return FS::ConvertResult(store_file.GetError());
 
-  const u32 store_size = store_file->GetSize();
+  const u32 store_size = store_file.GetSize();
   u8* const store = static_cast<u8*>(std::malloc(store_size ? store_size : 1));
   if (!store)
     return ES_SHORT_READ;
-  if (store_size && !store_file->Read(store, store_size))
+  if (store_size && !store_file.Read(store, store_size))
   {
     std::free(store);
     return ES_SHORT_READ;
@@ -1141,8 +1141,8 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
   const auto store_file =
       m_ios.GetFS()->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH.c_str(),
                                        {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read});
-  if (!store_file || !store_file->Seek(0, FS::SeekMode::End) ||
-      !store_file->Write(cert.GetBytes(&cert_size), cert_size))
+  if (!store_file || !store_file.Seek(0, FS::SeekMode::End) ||
+      !store_file.Write(cert.GetBytes(&cert_size), cert_size))
   {
     return ES_EIO;
   }

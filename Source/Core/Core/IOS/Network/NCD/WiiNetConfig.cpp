@@ -22,7 +22,7 @@ void WiiNetConfig::ReadConfig(FS::FileSystem* fs)
 {
   {
     const auto file = fs->OpenFile(PID_NCD, PID_NCD, CONFIG_PATH.c_str(), FS::Mode::Read);
-    if (file && file->Read(&m_data, 1))
+    if (file && file.Read(&m_data, 1))
       return;
   }
   ResetConfig(fs);
@@ -33,7 +33,7 @@ void WiiNetConfig::WriteConfig(FS::FileSystem* fs) const
   constexpr FS::Modes public_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite};
   fs->CreateFullPath(PID_NCD, PID_NCD, CONFIG_PATH.c_str(), 0, public_modes);
   const auto file = fs->CreateAndOpenFile(PID_NCD, PID_NCD, CONFIG_PATH.c_str(), public_modes);
-  if (!file || !file->Write(&m_data, 1))
+  if (!file || !file.Write(&m_data, 1))
     ERROR_LOG(IOS_NET, "Failed to write config");
 }
 

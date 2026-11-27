@@ -760,7 +760,7 @@ bool SharedContentMap::WriteEntries() const
     constexpr HLE::FS::Modes modes{HLE::FS::Mode::ReadWrite, HLE::FS::Mode::ReadWrite,
                                    HLE::FS::Mode::None};
     const auto file = m_fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), modes);
-    if (!file || (m_entry_count && !file->Write(m_entries, m_entry_count)))
+    if (!file || (m_entry_count && !file.Write(m_entries, m_entry_count)))
       return false;
   }
   return m_fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), CONTENT_MAP_PATH) ==
@@ -873,8 +873,8 @@ u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
   constexpr HLE::FS::Modes modes{HLE::FS::Mode::ReadWrite, HLE::FS::Mode::ReadWrite,
                                  HLE::FS::Mode::None};
   const auto file = m_fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, UID_MAP_PATH, modes);
-  if (!file || !file->Seek(0, HLE::FS::SeekMode::End) || !file->Write(&swapped_title_id, 1) ||
-      !file->Write(&swapped_uid, 1))
+  if (!file || !file.Seek(0, HLE::FS::SeekMode::End) || !file.Write(&swapped_title_id, 1) ||
+      !file.Write(&swapped_uid, 1))
   {
     ERROR_LOG(IOS_ES, "Failed to write to /sys/uid.sys");
     return 0;

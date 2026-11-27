@@ -7,7 +7,6 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
-#include <expected>
 #include <string_view>
 #include <utility>
 
@@ -208,16 +207,6 @@ void FSCore::DoFdState(PointerWrap& p)
   }
 }
 
-static ResultCode CodeOf(ResultCode code)
-{
-  return code;
-}
-
-template <typename T> static ResultCode CodeOf(const Result<T>& result)
-{
-  return result.has_value() ? ResultCode::Success : result.error();
-}
-
 // Logs an FS command and its result; the command is formatted, on the stack, only when the
 // message is logged.
 static void LogResult(ResultCode code, const char* format, ...) DOLPHIN_PRINTF_ATTR(2, 3);
@@ -325,12 +314,12 @@ FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const char* path, FS::
 
   ticks.Add(EstimateFileLookupTicks(path, FileLookupMode::Normal));
 
-  auto backend_fd = m_ios.GetFS()->OpenFile(uid, gid, path, mode);
-  LogResult(CodeOf(backend_fd), "OpenFile(%s)", path);
+  FS::FileHandle backend_fd = m_ios.GetFS()->OpenFile(uid, gid, path, mode);
+  LogResult(backend_fd.GetError(), "OpenFile(%s)", path);
   if (!backend_fd)
-    return {this, ConvertResult(backend_fd.error()), ticks};
+    return {this, ConvertResult(backend_fd.GetError()), ticks};
 
-  Handle& handle = GetHandle(fd) = Handle{gid, uid, backend_fd->Release()};
+  Handle& handle = GetHandle(fd) = Handle{gid, uid, backend_fd.Release()};
   /* zero-padded, unterminated when it fills the field */
   memset(handle.name, 0, sizeof(handle.name));
   memcpy(handle.name, path, path_length < sizeof(handle.name) ? path_length : sizeof(handle.name));
@@ -359,7 +348,7 @@ s32 FSCore::Close(u64 fd, Ticks ticks)
       ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
 
     const ResultCode result = m_ios.GetFS()->Close(handle.fs_fd);
-    LogResult(CodeOf(result), "Close(%s)", handle.name);
+    LogResult(result, "Close(%s)", handle.name);
     EraseHandle(fd);
     if (result != ResultCode::Success)
       return ConvertResult(result);
@@ -593,15 +582,14 @@ struct ISFSFileStats
 };
 #pragma pack(pop)
 
-template <typename T>
-static Result<T> GetParams(Memory::MemoryManager& memory, const IOCtlRequest& request)
+// Whether the request holds the parameters, copied into out
+static bool GetParams(Memory::MemoryManager& memory, const IOCtlRequest& request, ISFSParams* out)
 {
-  if (request.buffer_in_size < sizeof(T))
-    return std::unexpected{ResultCode::Invalid};
+  if (request.buffer_in_size < sizeof(*out))
+    return false;
 
-  T params;
-  memory.CopyFromEmu(&params, request.buffer_in, sizeof(params));
-  return params;
+  memory.CopyFromEmu(out, request.buffer_in, sizeof(*out));
+  return true;
 }
 
 IPCReply FSDevice::IOCtl(const IOCtlRequest& request)
@@ -693,13 +681,13 @@ IPCReply FSDevice::GetStats(const Handle& handle, const IOCtlRequest& request)
 
 IPCReply FSDevice::CreateDirectory(const Handle& handle, const IOCtlRequest& request)
 {
-  const auto params = GetParams<ISFSParams>(GetSystem().GetMemory(), request);
-  if (!params)
-    return GetFSReply(ConvertResult(params.error()));
+  ISFSParams params;
+  if (!GetParams(GetSystem().GetMemory(), request, &params))
+    return GetFSReply(ConvertResult(ResultCode::Invalid));
 
-  const ResultCode result = m_ios.GetFS()->CreateDirectory(handle.uid, handle.gid, params->path,
-                                                           params->attribute, params->modes);
-  LogResult(CodeOf(result), "CreateDirectory(%s)", params->path);
+  const ResultCode result = m_ios.GetFS()->CreateDirectory(handle.uid, handle.gid, params.path,
+                                                           params.attribute, params.modes);
+  LogResult(result, "CreateDirectory(%s)", params.path);
   return GetReplyForSuperblockOperation(m_ios.GetVersion(), result);
 }
 
@@ -766,13 +754,13 @@ IPCReply FSDevice::ReadDirectory(const Handle& handle, const IOCtlVRequest& requ
 
 IPCReply FSDevice::SetAttribute(const Handle& handle, const IOCtlRequest& request)
 {
-  const auto params = GetParams<ISFSParams>(GetSystem().GetMemory(), request);
-  if (!params)
-    return GetFSReply(ConvertResult(params.error()));
+  ISFSParams params;
+  if (!GetParams(GetSystem().GetMemory(), request, &params))
+    return GetFSReply(ConvertResult(ResultCode::Invalid));
 
   const ResultCode result = m_ios.GetFS()->SetMetadata(
-      handle.uid, params->path, params->uid, params->gid, params->attribute, params->modes);
-  LogResult(CodeOf(result), "SetMetadata(%s)", params->path);
+      handle.uid, params.path, params.uid, params.gid, params.attribute, params.modes);
+  LogResult(result, "SetMetadata(%s)", params.path);
   return GetReplyForSuperblockOperation(m_ios.GetVersion(), result);
 }
 
@@ -811,7 +799,7 @@ FS::ResultCode FSCore::DeleteFile(FS::Uid uid, FS::Gid gid, const char* path, Ti
 
   const ResultCode result = m_ios.GetFS()->Delete(uid, gid, path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "Delete(%s)", path);
+  LogResult(result, "Delete(%s)", path);
   return result;
 }
 
@@ -837,7 +825,7 @@ FS::ResultCode FSCore::RenameFile(FS::Uid uid, FS::Gid gid, const char* old_path
 
   const ResultCode result = m_ios.GetFS()->Rename(uid, gid, old_path, new_path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "Rename(%s, %s)", old_path, new_path);
+  LogResult(result, "Rename(%s, %s)", old_path, new_path);
   return result;
 }
 
@@ -865,30 +853,30 @@ FS::ResultCode FSCore::CreateFile(FS::Uid uid, FS::Gid gid, const char* path,
 
   const ResultCode result = m_ios.GetFS()->CreateFile(uid, gid, path, attribute, modes);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "CreateFile(%s)", path);
+  LogResult(result, "CreateFile(%s)", path);
   return result;
 }
 
 IPCReply FSDevice::CreateFile(const Handle& handle, const IOCtlRequest& request)
 {
-  const auto params = GetParams<ISFSParams>(GetSystem().GetMemory(), request);
-  if (!params)
-    return GetFSReply(ConvertResult(params.error()));
+  ISFSParams params;
+  if (!GetParams(GetSystem().GetMemory(), request, &params))
+    return GetFSReply(ConvertResult(ResultCode::Invalid));
   return MakeIPCReply([&](Ticks ticks) {
     return ConvertResult(
-        m_core.CreateFile(handle.uid, handle.gid, params->path, params->attribute, params->modes));
+        m_core.CreateFile(handle.uid, handle.gid, params.path, params.attribute, params.modes));
   });
 }
 
 IPCReply FSDevice::SetFileVersionControl(const Handle& handle, const IOCtlRequest& request)
 {
-  const auto params = GetParams<ISFSParams>(GetSystem().GetMemory(), request);
-  if (!params)
-    return GetFSReply(ConvertResult(params.error()));
+  ISFSParams params;
+  if (!GetParams(GetSystem().GetMemory(), request, &params))
+    return GetFSReply(ConvertResult(ResultCode::Invalid));
 
-  // FS_SetFileVersionControl(ctx->uid, params->path, params->attribute)
-  ERROR_LOG(IOS_FS, "SetFileVersionControl(%s, %#x): Stubbed", params->path,
-            (unsigned)params->attribute);
+  // FS_SetFileVersionControl(ctx->uid, params.path, params.attribute)
+  ERROR_LOG(IOS_FS, "SetFileVersionControl(%s, %#x): Stubbed", params.path,
+            (unsigned)params.attribute);
   return GetFSReply(IPC_SUCCESS);
 }
 

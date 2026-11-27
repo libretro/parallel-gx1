@@ -43,7 +43,7 @@ NWC24Dl::NWC24Dl(FS::FileSystem* fs) : m_fs{fs}
 bool NWC24Dl::ReadDlList()
 {
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, DL_LIST_PATH, FS::Mode::Read);
-  if (!file || !file->Read(&m_data, 1))
+  if (!file || !file.Read(&m_data, 1))
   {
     ERROR_LOG(IOS_WC24, "Failed to read the DL list");
     return false;
@@ -82,7 +82,7 @@ void NWC24Dl::WriteDlList() const
   m_fs->CreateFullPath(PID_KD, PID_KD, DL_LIST_PATH, 0, public_modes);
   const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, DL_LIST_PATH, public_modes);
 
-  if (!file || !file->Write(&m_data, 1))
+  if (!file || !file.Write(&m_data, 1))
     ERROR_LOG(IOS_WC24, "Failed to open or write WC24 DL list file");
 }
 
@@ -147,7 +147,7 @@ bool NWC24Dl::GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const
   if (!file)
     return false;
 
-  if (!file->Read(pubk_mod, 1))
+  if (!file.Read(pubk_mod, 1))
     return false;
   return true;
 }

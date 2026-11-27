@@ -77,10 +77,10 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) con
   }
 
   // read straight into the reader
-  const u32 size = ticket_file->GetSize();
+  const u32 size = ticket_file.GetSize();
   ES::TicketReader ticket;
   u8* const bytes = ticket.ResizeBytes(size);
-  if (size && (!bytes || !ticket_file->Read(bytes, size)))
+  if (size && (!bytes || !ticket_file.Read(bytes, size)))
     return {};
 
   return ticket;
@@ -258,7 +258,7 @@ bool ESCore::IsContentStored(const ES::TMDReader& tmd, const ES::Content& conten
 
   // Check whether the content file exists.
   const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
-  if (!file.has_value())
+  if (!file)
     return false;
 
   // If content hash checks are disabled, all we have to do is check for existence.
@@ -271,12 +271,12 @@ bool ESCore::IsContentStored(const ES::TMDReader& tmd, const ES::Content& conten
   u8 digest[20];
   u8 chunk[2048];
   sha1_stream_init(&sha1);
-  u32 left = file->GetSize();
+  u32 left = file.GetSize();
   bool ok = true;
   while (left)
   {
     const u32 n = left < sizeof(chunk) ? left : u32(sizeof(chunk));
-    if (!file->Read(chunk, n))
+    if (!file.Read(chunk, n))
     {
       ok = false;
       break;
@@ -501,7 +501,7 @@ bool ESCore::WriteImportTMD(const ES::TMDReader& tmd)
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, tmd_path, content_dir_modes);
     size_t tmd_size;
     const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
-    if (!file || !file->Write(tmd_bytes, tmd_size))
+    if (!file || !file.Write(tmd_bytes, tmd_size))
       return false;
   }
 

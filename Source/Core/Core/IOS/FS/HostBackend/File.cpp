@@ -4,7 +4,6 @@
 #include "Core/IOS/FS/FileSystem.h"
 
 #include <cstring>
-#include <expected>
 
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
@@ -111,39 +110,39 @@ void FileSystem::CloseAllHandles()
     CloseHandle(&m_handles[i]);
 }
 
-Result<FileHandle> FileSystem::OpenFile(Uid, Gid, const char* path, Mode mode)
+FileHandle FileSystem::OpenFile(Uid, Gid, const char* path, Mode mode)
 {
   const size_t path_length = std::strlen(path);
   if (path_length >= sizeof(Handle::wii_path))
-    return std::unexpected{ResultCode::Invalid};
+    return FileHandle{ResultCode::Invalid};
 
   Handle* handle = AssignFreeHandle();
   if (!handle)
-    return std::unexpected{ResultCode::NoFreeHandle};
+    return FileHandle{ResultCode::NoFreeHandle};
 
   char host_path[HOST_PATH_SIZE];
   if (!BuildFilename(path, host_path, sizeof(host_path)))
   {
     *handle = Handle{};
-    return std::unexpected{ResultCode::Invalid};
+    return FileHandle{ResultCode::Invalid};
   }
   if (File::IsDirectory(host_path))
   {
     *handle = Handle{};
-    return std::unexpected{ResultCode::Invalid};
+    return FileHandle{ResultCode::Invalid};
   }
 
   if (!File::IsFile(host_path))
   {
     *handle = Handle{};
-    return std::unexpected{ResultCode::NotFound};
+    return FileHandle{ResultCode::NotFound};
   }
 
   handle->host_file = OpenHostFile(host_path);
   if (handle->host_file < 0)
   {
     *handle = Handle{};
-    return std::unexpected{ResultCode::AccessDenied};
+    return FileHandle{ResultCode::AccessDenied};
   }
 
   std::memcpy(handle->wii_path, path, path_length + 1);

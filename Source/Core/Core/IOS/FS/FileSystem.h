@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <expected>
 
 #ifdef _WIN32
 // TODO: Horrible hack, remove ASAP!
@@ -42,9 +41,6 @@ enum class ResultCode
   CheckFailed,
   UnknownError,
 };
-
-template <typename T>
-using Result = std::expected<T, ResultCode>;
 
 using Uid = u32;
 using Gid = u16;
@@ -181,12 +177,19 @@ class FileHandle final
 {
 public:
   FileHandle(FileSystem* fs, Fd fd);
+  // a handle that failed to open, with why
+  explicit FileHandle(ResultCode error);
   FileHandle(FileHandle&&);
   ~FileHandle();
   FileHandle(const FileHandle&) = delete;
   FileHandle& operator=(const FileHandle&) = delete;
   // closes the descriptor held, then takes other's
   FileHandle& operator=(FileHandle&&);
+
+  /// Whether the file is open; Release() and moving it away do not change this
+  explicit operator bool() const { return m_error == ResultCode::Success; }
+  /// Why the file did not open, or Success
+  ResultCode GetError() const { return m_error; }
 
   /// Release the FD so that it is not automatically closed.
   Fd Release();
@@ -207,6 +210,7 @@ private:
   FileSystem* m_fs;
   Fd m_fd;
   bool m_has_fd;  // cleared once released or moved from
+  ResultCode m_error;
 };
 
 class FileSystem
@@ -225,9 +229,10 @@ public:
   ResultCode Format(Uid uid);
 
   /// Get a file descriptor for accessing a file. The FD will be automatically closed after use.
-  Result<FileHandle> OpenFile(Uid uid, Gid gid, const char* path, Mode mode);
+  /// The handle tests false, with the reason in GetError(), when the file did not open.
+  FileHandle OpenFile(Uid uid, Gid gid, const char* path, Mode mode);
   /// Create a file if it doesn't exist and open it in read/write mode.
-  Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes);
+  FileHandle CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes);
   /// Close a file descriptor.
   ResultCode Close(Fd fd);
   /// Read `size` bytes from the file descriptor, giving the number of bytes read.

@@ -40,11 +40,11 @@ static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket
   fs->CreateFullPath(PID_KERNEL, PID_KERNEL, path, 0, ticket_modes);
   const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, path, ticket_modes);
   if (!file)
-    return FS::ConvertResult(file.error());
+    return FS::ConvertResult(file.GetError());
 
   size_t raw_ticket_size;
   const u8* const raw_ticket = ticket.GetBytes(&raw_ticket_size);
-  return file->Write(raw_ticket, raw_ticket_size) ? IPC_SUCCESS : ES_EIO;
+  return file.Write(raw_ticket, raw_ticket_size) ? IPC_SUCCESS : ES_EIO;
 }
 
 ESCore::TitleImportExportContext::ContentContext::~ContentContext()
@@ -533,7 +533,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   {
     constexpr FS::Modes content_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, content_modes);
-    if (!file || !file->Write(decrypted_data, content_info.size))
+    if (!file || !file.Write(decrypted_data, content_info.size))
     {
       ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to write to %s", temp_path);
       return ES_EIO;
@@ -728,7 +728,7 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
     ASSERT(ticket.IsValid());
     ASSERT(ticket.IsV1Ticket() == was_v1_ticket);
     const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path, FS::Mode::ReadWrite);
-    if (!file || !file->Write(new_ticket, new_ticket_size))
+    if (!file || !file.Write(new_ticket, new_ticket_size))
       return ES_EIO;
   }
   else

@@ -324,7 +324,7 @@ ErrorCode WriteToVFF(const char* path, const char* filename, FS::FileSystem* fs,
           return;
         }
 
-        state.callbacks->m_vff = &*temp;
+        state.callbacks->m_vff = &temp;
 
         Common::ScopeGuard vff_delete_guard{[&] { state.fs->Delete(PID_KD, PID_KD, state.path); }};
 
@@ -394,7 +394,7 @@ ErrorCode ReadFromVFF(const char* path, const char* filename, FS::FileSystem* fs
           return;
         }
 
-        state.callbacks->m_vff = &*temp;
+        state.callbacks->m_vff = &temp;
 
         FATFS fatfs{};
         const FRESULT fatfs_mount_error_code = f_mount(&fatfs, "", 0);
@@ -457,7 +457,7 @@ ErrorCode DeleteFileFromVFF(const char* path, const char* filename, FS::FileSyst
           return;
         }
 
-        state.callbacks->m_vff = &*temp;
+        state.callbacks->m_vff = &temp;
 
         FATFS fatfs{};
         const FRESULT fatfs_mount_error_code = f_mount(&fatfs, "", 0);

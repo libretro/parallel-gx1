@@ -401,7 +401,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
     settings_buffer_t data;
     const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path,
                                    IOS::HLE::FS::Mode::Read);
-    if (file && file->Read(data, sizeof(data)))
+    if (file && file.Read(data, sizeof(data)))
     {
       settings_reader_t settings_reader;
       settings_reader_init(&settings_reader, data);
@@ -471,7 +471,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   const auto settings_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
                                                    settings_file_path, {rw_mode, rw_mode, rw_mode});
   if (!settings_file ||
-      !settings_file->Write(settings_writer.buffer, sizeof(settings_writer.buffer)))
+      !settings_file.Write(settings_writer.buffer, sizeof(settings_writer.buffer)))
   {
     PanicAlert("SetupWiiMemory: Can't create setting.txt file");
     return false;
@@ -554,7 +554,7 @@ static void WriteEmptyPlayRecord()
   if (!playrec_file)
     return;
   std::vector<u8> empty_record(0x80);
-  (void)playrec_file->Write(empty_record.data(), empty_record.size());
+  (void)playrec_file.Write(empty_record.data(), empty_record.size());
 }
 
 // __________________________________________________________________________________________________

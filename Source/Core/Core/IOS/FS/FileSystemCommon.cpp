@@ -6,7 +6,6 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
-#include <expected>
 #include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
@@ -68,12 +67,18 @@ IOS::HLE::ReturnCode ConvertResult(ResultCode code)
   return static_cast<ReturnCode>(-(static_cast<s32>(code) + 100));
 }
 
-FileHandle::FileHandle(FileSystem* fs, Fd fd) : m_fs{fs}, m_fd{fd}, m_has_fd{true}
+FileHandle::FileHandle(FileSystem* fs, Fd fd)
+    : m_fs{fs}, m_fd{fd}, m_has_fd{true}, m_error{ResultCode::Success}
+{
+}
+
+FileHandle::FileHandle(ResultCode error)
+    : m_fs{nullptr}, m_fd{0}, m_has_fd{false}, m_error{error}
 {
 }
 
 FileHandle::FileHandle(FileHandle&& other)
-    : m_fs{other.m_fs}, m_fd{other.m_fd}, m_has_fd{other.m_has_fd}
+    : m_fs{other.m_fs}, m_fd{other.m_fd}, m_has_fd{other.m_has_fd}, m_error{other.m_error}
 {
   other.m_has_fd = false;
 }
@@ -87,6 +92,7 @@ FileHandle& FileHandle::operator=(FileHandle&& other)
     m_fs = other.m_fs;
     m_fd = other.m_fd;
     m_has_fd = other.m_has_fd;
+    m_error = other.m_error;
     other.m_has_fd = false;
   }
   return *this;
@@ -118,14 +124,14 @@ u32 FileHandle::GetSize() const
   return status.size;
 }
 
-Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes)
+FileHandle FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes)
 {
-  if (Result<FileHandle> file = OpenFile(uid, gid, path, Mode::ReadWrite))
+  if (FileHandle file = OpenFile(uid, gid, path, Mode::ReadWrite))
     return file;
 
   const ResultCode result = CreateFile(uid, gid, path, 0, modes);
   if (result != ResultCode::Success)
-    return std::unexpected{result};
+    return FileHandle{result};
 
   return OpenFile(uid, gid, path, Mode::ReadWrite);
 }
@@ -271,11 +277,11 @@ void FileSystem::DoStateRead(PointerWrap& p, const char* directory_path, u8* buf
         continue;
       }
 
-      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Write);
+      FileHandle handle = OpenFile(0, 0, child_path, Mode::Write);
       if (!handle)
       {
         ERROR_LOG(IOS_FS, "DoStateRead failed to call OpenFile for %s: %u", child_path,
-                  static_cast<unsigned>(handle.error()));
+                  static_cast<unsigned>(handle.GetError()));
         p.SetVerifyMode();
         continue;
       }
@@ -288,7 +294,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const char* directory_path, u8* buf
 
         u32 written = 0;
         const ResultCode write_result =
-            WriteBytesToFile(handle->Get(), buffer, bytes_to_write, &written);
+            WriteBytesToFile(handle.Get(), buffer, bytes_to_write, &written);
         if (write_result != ResultCode::Success)
         {
           ERROR_LOG(IOS_FS, "DoStateRead failed to call Write for %s: %u", child_path,
@@ -370,11 +376,11 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_pat
 
     if (child_metadata.is_file)
     {
-      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Read);
+      FileHandle handle = OpenFile(0, 0, child_path, Mode::Read);
       if (!handle)
       {
         ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call OpenFile for %s: %u", child_name,
-                  static_cast<unsigned>(handle.error()));
+                  static_cast<unsigned>(handle.GetError()));
         p.SetVerifyMode();
         continue;
       }
@@ -385,7 +391,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_pat
         const u32 bytes_to_read = std::min(child_metadata.size - i, STATE_CHUNK_SIZE);
         u32 read = 0;
         const ResultCode read_result =
-            ReadBytesFromFile(handle->Get(), buffer, bytes_to_read, &read);
+            ReadBytesFromFile(handle.Get(), buffer, bytes_to_read, &read);
         if (read_result != ResultCode::Success)
         {
           ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u", child_name,

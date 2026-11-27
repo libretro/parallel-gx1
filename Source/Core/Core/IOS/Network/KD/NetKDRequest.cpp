@@ -1061,7 +1061,7 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   }
 
   settings_buffer_t data;
-  if (!file->Read(data, sizeof(data)))
+  if (!file.Read(data, sizeof(data)))
   {
     WriteReturnValue(memory, NWC24::WC24_ERR_FILE_READ, request.buffer_out);
     LogError(ErrorType::Account, NWC24::WC24_ERR_FILE_READ);
@@ -1226,7 +1226,7 @@ IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
       if (const auto file = fs->OpenFile(PID_KD, PID_KD, settings_file_path, FS::Mode::Read))
       {
         settings_buffer_t data;
-        if (file->Read(data, sizeof(data)))
+        if (file.Read(data, sizeof(data)))
         {
           settings_reader_t settings_reader;
           settings_reader_init(&settings_reader, data);

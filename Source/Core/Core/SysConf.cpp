@@ -59,7 +59,7 @@ void SysConf::Load()
 
   const auto file = m_fs->OpenFile(IOS::HLE::FS::Uid{0}, IOS::HLE::FS::Gid{0},
                                    "/shared2/sys/SYSCONF", IOS::HLE::FS::Mode::Read);
-  if (!file || file->GetSize() != SYSCONF_SIZE || !LoadFromFile(*file))
+  if (!file || file.GetSize() != SYSCONF_SIZE || !LoadFromFile(file))
   {
     WARN_LOG(CORE, "No valid SYSCONF detected. Creating a new one.");
     InsertDefaultEntries();
@@ -223,7 +223,7 @@ bool SysConf::Save() const
   {
     auto file = m_fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, temp_file,
                                         {rw_mode, rw_mode, rw_mode});
-    written = file && file->Write(buffer, SYSCONF_SIZE);
+    written = file && file.Write(buffer, SYSCONF_SIZE);
   }
   std::free(buffer);
   if (!written)

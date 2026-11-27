@@ -56,7 +56,7 @@ static bool CreateShopLogs(IOS::HLE::FS::FileSystem* fs)
 
     const auto new_handle = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, paths[i],
                                                   {rw_mode, rw_mode, rw_mode});
-    if (!new_handle || !new_handle->Write(dummy_data, sizeof(dummy_data)))
+    if (!new_handle || !new_handle.Write(dummy_data, sizeof(dummy_data)))
       return false;
   }
   return true;

@@ -25,7 +25,7 @@ WC24FriendList::WC24FriendList(FS::FileSystem* fs) : m_fs{fs}
 void WC24FriendList::ReadFriendList()
 {
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, FRIEND_LIST_PATH, FS::Mode::Read);
-  if (!file || !file->Read(&m_data, 1))
+  if (!file || !file.Read(&m_data, 1))
     return;
 
   const bool success = CheckFriendList();
