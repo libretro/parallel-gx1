@@ -873,7 +873,7 @@ ResultCode FileSystem::ReadDirectory(Uid uid, Gid gid, const char* path, Directo
   return ResultCode::Success;
 }
 
-Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const char* path)
+ResultCode FileSystem::GetMetadata(Uid uid, Gid gid, const char* path, Metadata* out)
 {
   const FstEntry* entry = nullptr;
   if (!std::strcmp(path, "/"))
@@ -883,25 +883,25 @@ Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const char* path)
   else
   {
     if (!IsValidNonRootPath(path))
-      return std::unexpected{ResultCode::Invalid};
+      return ResultCode::Invalid;
 
     SplitPathResult split_path;
     SplitPathAndBasename(path, &split_path);
     const FstEntry* parent = GetFstEntryForPath(split_path.parent);
     if (!parent)
-      return std::unexpected{ResultCode::NotFound};
+      return ResultCode::NotFound;
     if (!parent->CheckPermission(uid, gid, Mode::Read))
-      return std::unexpected{ResultCode::AccessDenied};
+      return ResultCode::AccessDenied;
     entry = GetFstEntryForPath(path);
   }
 
   if (!entry)
-    return std::unexpected{ResultCode::NotFound};
+    return ResultCode::NotFound;
 
-  Metadata metadata = entry->data;
+  *out = entry->data;
   char host_path[HOST_PATH_SIZE];
-  metadata.size = BuildFilename(path, host_path, sizeof(host_path)) ? File::GetSize(host_path) : 0;
-  return metadata;
+  out->size = BuildFilename(path, host_path, sizeof(host_path)) ? File::GetSize(host_path) : 0;
+  return ResultCode::Success;
 }
 
 ResultCode FileSystem::SetMetadata(Uid caller_uid, const char* path, Uid uid, Gid gid,
@@ -938,49 +938,49 @@ ResultCode FileSystem::SetMetadata(Uid caller_uid, const char* path, Uid uid, Gi
   return ResultCode::Success;
 }
 
-Result<NandStats> FileSystem::GetNandStats()
+ResultCode FileSystem::GetNandStats(NandStats* out)
 {
-  const auto root_stats = GetDirectoryStats("/");
-  if (!root_stats)
-    return std::unexpected{root_stats.error()};  // TODO: is this right? can this fail on hardware?
+  DirectoryStats root_stats;
+  const ResultCode result = GetDirectoryStats("/", &root_stats);
+  if (result != ResultCode::Success)
+    return result;  // TODO: is this right? can this fail on hardware?
 
-  NandStats stats{};
-  stats.cluster_size = CLUSTER_SIZE;
-  stats.free_clusters = USABLE_CLUSTERS - root_stats->used_clusters;
-  stats.used_clusters = root_stats->used_clusters;
-  stats.bad_clusters = 0;
-  stats.reserved_clusters = RESERVED_CLUSTERS;
-  stats.free_inodes = TOTAL_INODES - root_stats->used_inodes;
-  stats.used_inodes = root_stats->used_inodes;
-
-  return stats;
+  std::memset(out, 0, sizeof(*out));
+  out->cluster_size = CLUSTER_SIZE;
+  out->free_clusters = USABLE_CLUSTERS - root_stats.used_clusters;
+  out->used_clusters = root_stats.used_clusters;
+  out->bad_clusters = 0;
+  out->reserved_clusters = RESERVED_CLUSTERS;
+  out->free_inodes = TOTAL_INODES - root_stats.used_inodes;
+  out->used_inodes = root_stats.used_inodes;
+  return ResultCode::Success;
 }
 
-Result<DirectoryStats> FileSystem::GetDirectoryStats(const char* wii_path)
+ResultCode FileSystem::GetDirectoryStats(const char* wii_path, DirectoryStats* out)
 {
-  const auto result = GetExtendedDirectoryStats(wii_path);
-  if (!result)
-    return std::unexpected{result.error()};
+  ExtendedDirectoryStats stats;
+  const ResultCode result = GetExtendedDirectoryStats(wii_path, &stats);
+  if (result != ResultCode::Success)
+    return result;
 
-  DirectoryStats stats{};
-  stats.used_inodes = static_cast<u32>(MIN((u64)result->used_inodes, (u64)TOTAL_INODES));
-  stats.used_clusters = static_cast<u32>(MIN((u64)result->used_clusters, (u64)USABLE_CLUSTERS));
-  return stats;
+  std::memset(out, 0, sizeof(*out));
+  out->used_inodes = static_cast<u32>(MIN((u64)stats.used_inodes, (u64)TOTAL_INODES));
+  out->used_clusters = static_cast<u32>(MIN((u64)stats.used_clusters, (u64)USABLE_CLUSTERS));
+  return ResultCode::Success;
 }
 
-Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const char* wii_path)
+ResultCode FileSystem::GetExtendedDirectoryStats(const char* wii_path, ExtendedDirectoryStats* out)
 {
   if (!IsValidPath(wii_path))
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
 
-  ExtendedDirectoryStats stats{};
   char path[HOST_PATH_SIZE];
   if (!BuildFilename(wii_path, path, sizeof(path)))
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
   File::FileInfo info(path);
   if (!info.Exists())
   {
-    return std::unexpected{ResultCode::NotFound};
+    return ResultCode::NotFound;
   }
   if (info.IsDirectory())
   {
@@ -994,13 +994,14 @@ Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const char*
                           &clusters);
 
     // add one for the folder itself
-    stats.used_inodes = 1 + entries;
-    stats.used_clusters = clusters;
+    std::memset(out, 0, sizeof(*out));
+    out->used_inodes = 1 + entries;
+    out->used_clusters = clusters;
   }
   else
   {
-    return std::unexpected{ResultCode::Invalid};
+    return ResultCode::Invalid;
   }
-  return stats;
+  return ResultCode::Success;
 }
 }  // namespace IOS::HLE::FS

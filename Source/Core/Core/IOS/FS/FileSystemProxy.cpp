@@ -666,22 +666,23 @@ IPCReply FSDevice::GetStats(const Handle& handle, const IOCtlRequest& request)
   if (request.buffer_out_size < sizeof(ISFSNandStats))
     return GetFSReply(ConvertResult(ResultCode::Invalid));
 
-  const Result<NandStats> stats = m_ios.GetFS()->GetNandStats();
-  LogResult(CodeOf(stats), "GetNandStats");
-  if (!stats)
-    return IPCReply(ConvertResult(stats.error()));
+  NandStats stats;
+  const ResultCode result = m_ios.GetFS()->GetNandStats(&stats);
+  LogResult(result, "GetNandStats");
+  if (result != ResultCode::Success)
+    return IPCReply(ConvertResult(result));
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
   ISFSNandStats out;
-  out.cluster_size = stats->cluster_size;
-  out.free_clusters = stats->free_clusters;
-  out.used_clusters = stats->used_clusters;
-  out.bad_clusters = stats->bad_clusters;
-  out.reserved_clusters = stats->reserved_clusters;
-  out.free_inodes = stats->free_inodes;
-  out.used_inodes = stats->used_inodes;
+  out.cluster_size = stats.cluster_size;
+  out.free_clusters = stats.free_clusters;
+  out.used_clusters = stats.used_clusters;
+  out.bad_clusters = stats.bad_clusters;
+  out.reserved_clusters = stats.reserved_clusters;
+  out.free_inodes = stats.free_inodes;
+  out.used_inodes = stats.used_inodes;
   memory.CopyToEmu(request.buffer_out, &out, sizeof(out));
   return IPCReply(IPC_SUCCESS);
 }
@@ -782,19 +783,20 @@ IPCReply FSDevice::GetAttribute(const Handle& handle, const IOCtlRequest& reques
   char path[65];
   memory.CopyStringFromEmu(path, request.buffer_in, 64);
   const auto ticks = EstimateFileLookupTicks(path, FileLookupMode::Split);
-  const Result<Metadata> metadata = m_ios.GetFS()->GetMetadata(handle.uid, handle.gid, path);
-  LogResult(CodeOf(metadata), "GetMetadata(%s)", path);
-  if (!metadata)
-    return GetFSReply(ConvertResult(metadata.error()), ticks);
+  Metadata metadata;
+  const ResultCode result = m_ios.GetFS()->GetMetadata(handle.uid, handle.gid, path, &metadata);
+  LogResult(result, "GetMetadata(%s)", path);
+  if (result != ResultCode::Success)
+    return GetFSReply(ConvertResult(result), ticks);
 
   // Yes, the other members aren't copied at all. Actually, IOS does not even memset
   // the struct at all, which means uninitialised bytes from the stack are returned.
   // For the sake of determinism, let's just zero initialise the struct.
   ISFSParams out{};
-  out.uid = metadata->uid;
-  out.gid = metadata->gid;
-  out.attribute = metadata->attribute;
-  out.modes = metadata->modes;
+  out.uid = metadata.uid;
+  out.gid = metadata.gid;
+  out.attribute = metadata.attribute;
+  out.modes = metadata.modes;
   memory.CopyToEmu(request.buffer_out, &out, sizeof(out));
   return GetFSReply(IPC_SUCCESS, ticks);
 }
@@ -932,13 +934,14 @@ IPCReply FSDevice::GetUsage(const Handle& handle, const IOCtlVRequest& request)
 
   char directory[65];
   memory.CopyStringFromEmu(directory, request.in_vectors[0].address, 64);
-  const Result<DirectoryStats> stats = m_ios.GetFS()->GetDirectoryStats(directory);
-  LogResult(CodeOf(stats), "GetDirectoryStats(%s)", directory);
-  if (!stats)
-    return GetFSReply(ConvertResult(stats.error()));
+  DirectoryStats stats;
+  const ResultCode result = m_ios.GetFS()->GetDirectoryStats(directory, &stats);
+  LogResult(result, "GetDirectoryStats(%s)", directory);
+  if (result != ResultCode::Success)
+    return GetFSReply(ConvertResult(result));
 
-  memory.Write_U32(stats->used_clusters, request.io_vectors[0].address);
-  memory.Write_U32(stats->used_inodes, request.io_vectors[1].address);
+  memory.Write_U32(stats.used_clusters, request.io_vectors[0].address);
+  memory.Write_U32(stats.used_inodes, request.io_vectors[1].address);
   return GetFSReply(IPC_SUCCESS);
 }
 

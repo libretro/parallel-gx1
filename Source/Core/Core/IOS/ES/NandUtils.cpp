@@ -97,8 +97,9 @@ static bool IsValidPartOfTitleID(const char* string)
 
 static bool IsDirectory(FS::FileSystem* fs, const char* path)
 {
-  const FS::Result<FS::Metadata> metadata = fs->GetMetadata(PID_KERNEL, PID_KERNEL, path);
-  return metadata && !metadata->is_file;
+  FS::Metadata metadata;
+  return fs->GetMetadata(PID_KERNEL, PID_KERNEL, path, &metadata) == FS::ResultCode::Success &&
+         !metadata.is_file;
 }
 
 static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir,
@@ -364,12 +365,14 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
 
   char data_dir[Common::NAND_PATH_SIZE];
   Common::GetTitleDataPath(title_id, data_dir, sizeof(data_dir));
-  const FS::Result<FS::Metadata> data_dir_metadata =
-      fs->GetMetadata(PID_KERNEL, PID_KERNEL, data_dir);
-  if (data_dir_metadata ? data_dir_metadata->is_file :
-                          data_dir_metadata.error() != FS::ResultCode::NotFound ||
-                              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0,
-                                                  data_dir_modes) != FS::ResultCode::Success)
+  FS::Metadata data_dir_metadata;
+  const FS::ResultCode data_dir_result =
+      fs->GetMetadata(PID_KERNEL, PID_KERNEL, data_dir, &data_dir_metadata);
+  if (data_dir_result == FS::ResultCode::Success ?
+          data_dir_metadata.is_file :
+          data_dir_result != FS::ResultCode::NotFound ||
+              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0, data_dir_modes) !=
+                  FS::ResultCode::Success)
   {
     ERROR_LOG(IOS_ES, "Failed to create data dir for %016" PRIx64, (u64)title_id);
     return false;
@@ -411,9 +414,12 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
   // IOS moves the title content directory to /import if the TMD exists during an import.
   char tmd_path[Common::NAND_PATH_SIZE];
   Common::GetTMDFileName(title_id, tmd_path, sizeof(tmd_path));
-  const auto file_info = fs->GetMetadata(PID_KERNEL, PID_KERNEL, tmd_path);
-  if (!file_info || !file_info->is_file)
+  FS::Metadata file_info;
+  if (fs->GetMetadata(PID_KERNEL, PID_KERNEL, tmd_path, &file_info) != FS::ResultCode::Success ||
+      !file_info.is_file)
+  {
     return true;
+  }
 
   char content_dir[Common::NAND_PATH_SIZE];
   Common::GetTitleContentPath(title_id, content_dir, sizeof(content_dir));

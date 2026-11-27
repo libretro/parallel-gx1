@@ -259,19 +259,19 @@ public:
   /// The list is left empty on failure.
   ResultCode ReadDirectory(Uid caller_uid, Gid caller_gid, const char* path, DirectoryList* list);
 
-  /// Get metadata about a file.
-  Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const char* path);
+  /// Get metadata about a file into out, which is left alone on failure.
+  ResultCode GetMetadata(Uid caller_uid, Gid caller_gid, const char* path, Metadata* out);
   /// Set metadata for a file.
   ResultCode SetMetadata(Uid caller_uid, const char* path, Uid uid, Gid gid,
                          FileAttribute attribute, Modes modes);
 
   /// Get usage information about the NAND (block size, cluster and inode counts).
-  Result<NandStats> GetNandStats();
+  ResultCode GetNandStats(NandStats* out);
   /// Get usage information about a directory (used cluster and inode counts).
-  Result<DirectoryStats> GetDirectoryStats(const char* path);
+  ResultCode GetDirectoryStats(const char* path, DirectoryStats* out);
 
   /// Like GetDirectoryStats() but not limited to the actual 512 MB NAND limit.
-  Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const char* path);
+  ResultCode GetExtendedDirectoryStats(const char* path, ExtendedDirectoryStats* out);
 
 protected:
   /// Savestated files go through a buffer of this size, given to the directory walks below.

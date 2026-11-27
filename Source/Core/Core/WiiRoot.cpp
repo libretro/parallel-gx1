@@ -185,8 +185,12 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, char* host_path, size_t hos
     }
 
     // Do not overwrite any existing files.
-    if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path).has_value())
+    FS::Metadata metadata;
+    if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path, &metadata) ==
+        FS::ResultCode::Success)
+    {
       continue;
+    }
 
     // written into the NAND from the mapping where the host file has one
     File::IOFile host_file{host_path, "rb"};

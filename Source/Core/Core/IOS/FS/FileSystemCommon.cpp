@@ -144,13 +144,14 @@ ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const char* path, FileAt
     char subpath[MaxPathLength + 1];
     std::memcpy(subpath, path, length);
     subpath[length] = '\0';
-    const Result<Metadata> metadata = GetMetadata(uid, gid, subpath);
-    if (!metadata && metadata.error() != ResultCode::NotFound)
-      return metadata.error();
-    if (metadata && metadata->is_file)
+    Metadata metadata;
+    const ResultCode metadata_result = GetMetadata(uid, gid, subpath, &metadata);
+    if (metadata_result != ResultCode::Success && metadata_result != ResultCode::NotFound)
+      return metadata_result;
+    if (metadata_result == ResultCode::Success && metadata.is_file)
       return ResultCode::Invalid;
 
-    if (!metadata)
+    if (metadata_result != ResultCode::Success)
     {
       const ResultCode result = CreateDirectory(uid, gid, subpath, attribute, modes);
       if (result != ResultCode::Success)
@@ -310,21 +311,22 @@ void FileSystem::DoStateRead(PointerWrap& p, const char* directory_path, u8* buf
 
 void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_path, u8* buffer)
 {
-  const Result<Metadata> metadata = GetMetadata(0, 0, directory_path);
-  if (!metadata)
+  Metadata metadata;
+  const ResultCode metadata_result = GetMetadata(0, 0, directory_path, &metadata);
+  if (metadata_result != ResultCode::Success)
   {
     ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u", directory_path,
-              static_cast<unsigned>(metadata.error()));
+              static_cast<unsigned>(metadata_result));
     p.SetVerifyMode();
     return;
   }
-  p.Do(metadata->uid);
-  p.Do(metadata->gid);
-  p.Do(metadata->attribute);
-  p.Do(metadata->modes);
-  p.Do(metadata->is_file);
-  p.Do(metadata->size);
-  p.Do(metadata->fst_index);
+  p.Do(metadata.uid);
+  p.Do(metadata.gid);
+  p.Do(metadata.attribute);
+  p.Do(metadata.modes);
+  p.Do(metadata.is_file);
+  p.Do(metadata.size);
+  p.Do(metadata.fst_index);
 
   DirectoryList children;
   const ResultCode list_result = ReadDirectory(0, 0, directory_path, &children);
@@ -348,19 +350,20 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_pat
       continue;
     }
 
-    Result<Metadata> child_metadata = GetMetadata(0, 0, child_path);
-    if (!child_metadata)
+    Metadata child_metadata;
+    const ResultCode child_result = GetMetadata(0, 0, child_path, &child_metadata);
+    if (child_result != ResultCode::Success)
     {
       ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u", child_name,
-                static_cast<unsigned>(child_metadata.error()));
+                static_cast<unsigned>(child_result));
       p.SetVerifyMode();
       continue;
     }
 
-    p.Do(*child_metadata);
+    p.Do(child_metadata);
     DoStateName(p, children.names[child]);
 
-    if (child_metadata->is_file)
+    if (child_metadata.is_file)
     {
       Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Read);
       if (!handle)
@@ -372,9 +375,9 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const char* directory_pat
       }
 
       u32 i = 0;
-      while (i < child_metadata->size)
+      while (i < child_metadata.size)
       {
-        const u32 bytes_to_read = std::min(child_metadata->size - i, STATE_CHUNK_SIZE);
+        const u32 bytes_to_read = std::min(child_metadata.size - i, STATE_CHUNK_SIZE);
         Result<size_t> read_result = handle->Read(buffer, bytes_to_read);
         if (!read_result)
         {

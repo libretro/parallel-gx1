@@ -588,7 +588,9 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
     // is still in /import, not /title.
     char path[Common::NAND_PATH_SIZE];
     GetImportContentPath(title_id, content.id, path, sizeof(path));
-    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path).has_value())
+    FS::Metadata metadata;
+    if (ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path, &metadata) !=
+        FS::ResultCode::Success)
       return false;
   }
   return true;
