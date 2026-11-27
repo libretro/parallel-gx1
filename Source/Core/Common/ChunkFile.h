@@ -17,7 +17,6 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -58,22 +57,9 @@ public:
   bool IsVerifyMode() const { return m_mode == Mode::Verify; }
 
   template <typename T>
-  void Do(std::vector<T>& x)
-  {
-    DoContiguousContainer(x);
-  }
-
-  template <typename T>
   void Do(std::basic_string<T>& x)
   {
     DoContiguousContainer(x);
-  }
-
-  template <typename T, typename U>
-  void Do(std::pair<T, U>& x)
-  {
-    Do(x.first);
-    Do(x.second);
   }
 
   template <typename V, auto last_member, typename = decltype(last_member)>
