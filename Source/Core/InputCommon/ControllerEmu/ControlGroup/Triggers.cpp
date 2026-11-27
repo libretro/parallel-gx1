@@ -11,7 +11,7 @@
 
 namespace ControllerEmu
 {
-Triggers::Triggers(const std::string& name_) : ControlGroup(name_, GroupType::Triggers)
+Triggers::Triggers(const char* name_) : ControlGroup(name_, GroupType::Triggers)
 {
   AddDeadzoneSetting(&m_deadzone_setting, 50);
 }

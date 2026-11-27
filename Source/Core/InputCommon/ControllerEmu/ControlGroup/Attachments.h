@@ -21,7 +21,7 @@ class AttachedController : public ControlGroupContainer
 class Attachments : public ControlGroup
 {
 public:
-  explicit Attachments(const std::string& name);
+  explicit Attachments(const char* name);
   ~Attachments() override;
 
   // Room for every Wii Remote extension

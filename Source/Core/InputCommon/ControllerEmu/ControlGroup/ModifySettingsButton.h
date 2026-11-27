@@ -12,7 +12,7 @@ namespace ControllerEmu
 class ModifySettingsButton : public Buttons
 {
 public:
-  explicit ModifySettingsButton(const std::string& button_name);
+  explicit ModifySettingsButton(const char* button_name);
 
   // Room for the hotkeys a controller has
   enum
@@ -20,7 +20,7 @@ public:
     MAX_HOTKEYS = 8
   };
 
-  void AddInput(std::string button_name, bool toggle = false);
+  void AddInput(const char* button_name, bool toggle = false);
 
   void UpdateState();
 

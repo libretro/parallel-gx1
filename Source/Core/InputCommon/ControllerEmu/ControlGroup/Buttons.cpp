@@ -8,12 +8,12 @@
 
 namespace ControllerEmu
 {
-Buttons::Buttons(const std::string& name_) : Buttons(name_, name_)
+Buttons::Buttons(const char* name_) : Buttons(name_, name_)
 {
 }
 
-Buttons::Buttons(std::string ini_name, std::string group_name)
-    : ControlGroup(std::move(ini_name), std::move(group_name), GroupType::Buttons)
+Buttons::Buttons(const char* ini_name, const char* group_name)
+    : ControlGroup(ini_name, group_name, GroupType::Buttons)
 {
 }
 

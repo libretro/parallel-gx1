@@ -15,7 +15,7 @@ namespace ControllerEmu
 class Triggers : public ControlGroup
 {
 public:
-  explicit Triggers(const std::string& name);
+  explicit Triggers(const char* name);
 
   // Writes count trigger states to out, 0 for any past the group's triggers.
   void GetState(ControlState* out, std::size_t count) const;

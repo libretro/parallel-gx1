@@ -22,8 +22,8 @@ static constexpr DT MAXIMUM_CALIBRATION_DURATION = DTFromSeconds(60 * 60);
 // This is made slightly lower than the UI update frequency of 30.
 static constexpr auto WORST_ACCEPTABLE_CALIBRATION_UPDATE_FREQUENCY = 25;
 
-IMUGyroscope::IMUGyroscope(std::string name_, std::string ui_name_)
-    : ControlGroup(std::move(name_), std::move(ui_name_), GroupType::IMUGyroscope)
+IMUGyroscope::IMUGyroscope(const char* name_, const char* ui_name_)
+    : ControlGroup(name_, ui_name_, GroupType::IMUGyroscope)
 {
   AddInput(Translatability::Translate, _trans("Pitch Up"));
   AddInput(Translatability::Translate, _trans("Pitch Down"));

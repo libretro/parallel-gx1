@@ -15,7 +15,7 @@
 
 namespace ControllerEmu
 {
-MixedTriggers::MixedTriggers(const std::string& name_)
+MixedTriggers::MixedTriggers(const char* name_)
     : ControlGroup(name_, GroupType::MixedTriggers)
 {
   AddDeadzoneSetting(&m_deadzone_setting, 25);

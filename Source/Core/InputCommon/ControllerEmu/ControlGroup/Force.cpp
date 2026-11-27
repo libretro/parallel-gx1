@@ -13,7 +13,7 @@
 
 namespace ControllerEmu
 {
-Force::Force(const std::string& name_)
+Force::Force(const char* name_)
     : ReshapableInput(name_, name_, GroupType::Force, ReshapeKind::Force)
 {
   AddInput(Translatability::Translate, _trans("Up"));
@@ -121,7 +121,7 @@ ControlState Force::GetDefaultInputRadiusAtAngle(double) const
   return 1.0;
 }
 
-Shake::Shake(const std::string& name_, ControlState default_intensity_scale)
+Shake::Shake(const char* name_, ControlState default_intensity_scale)
     : ControlGroup(name_, name_, GroupType::Shake)
 {
   // i18n: Refers to a 3D axis (used when mapping motion controls)

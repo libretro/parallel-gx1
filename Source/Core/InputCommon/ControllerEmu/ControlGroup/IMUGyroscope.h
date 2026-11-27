@@ -17,7 +17,7 @@ class IMUGyroscope : public ControlGroup
 public:
   using StateData = Common::Vec3;
 
-  IMUGyroscope(std::string name, std::string ui_name);
+  IMUGyroscope(const char* name, const char* ui_name);
 
   StateData GetRawState() const;
   // Also updates the state by default

@@ -84,7 +84,7 @@ public:
     ControlState samples[MAX_SAMPLES];
   };
 
-  ReshapableInput(std::string name, std::string ui_name, GroupType type, ReshapeKind kind);
+  ReshapableInput(const char* name, const char* ui_name, GroupType type, ReshapeKind kind);
 
   using ReshapeData = Common::DVec2;
 

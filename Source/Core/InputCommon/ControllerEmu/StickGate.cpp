@@ -113,9 +113,9 @@ u32 StickGate::GetIdealCalibrationSampleCount() const
   }
 }
 
-ReshapableInput::ReshapableInput(std::string name_, std::string ui_name_, GroupType type_,
+ReshapableInput::ReshapableInput(const char* name_, const char* ui_name_, GroupType type_,
                                  ReshapeKind kind)
-    : ControlGroup(std::move(name_), std::move(ui_name_), type_), m_reshape_kind(kind)
+    : ControlGroup(name_, ui_name_, type_), m_reshape_kind(kind)
 {
   // 50 is not always enough but users can set it to more with an expression
   AddDeadzoneSetting(&m_deadzone_setting, 50);
@@ -303,13 +303,13 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const char* 
   char key[INI_KEY_SIZE];
   LoadConfigDefault(section, base_name);
 
-  Common::JoinIniKey(group, sizeof(group), base_name, name.c_str(), "/");
+  Common::JoinIniKey(group, sizeof(group), base_name, name, "/");
 
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
     double range = 50.0;
-    Common::JoinIniKey(key, sizeof(key), group, modifier_input->name.c_str(), "/Range");
+    Common::JoinIniKey(key, sizeof(key), group, modifier_input->name, "/Range");
     section->Get(key, &range, 50.0);
     modifier_input->control_ref->SetRange(range / 100);
   }
@@ -359,13 +359,13 @@ void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const char* 
   char key[INI_KEY_SIZE];
   SaveConfigDefault(section, base_name);
 
-  if (!Common::JoinIniKey(group, sizeof(group), base_name, name.c_str(), "/"))
+  if (!Common::JoinIniKey(group, sizeof(group), base_name, name, "/"))
     return;
 
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
-    if (Common::JoinIniKey(key, sizeof(key), group, modifier_input->name.c_str(), "/Range"))
+    if (Common::JoinIniKey(key, sizeof(key), group, modifier_input->name, "/Range"))
       section->Set(key, modifier_input->control_ref->GetRange() * 100, 50.0);
   }
 

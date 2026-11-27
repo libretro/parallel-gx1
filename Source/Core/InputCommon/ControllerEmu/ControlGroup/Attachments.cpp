@@ -6,7 +6,7 @@
 namespace ControllerEmu
 {
 
-Attachments::Attachments(const std::string& name_) : ControlGroup(name_, GroupType::Attachments)
+Attachments::Attachments(const char* name_) : ControlGroup(name_, GroupType::Attachments)
 {
 }
 
@@ -54,7 +54,7 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
   SetSelectedAttachment(0);
 
   std::string attachment_text;
-  Common::JoinIniKey(key, sizeof(key), base, name.c_str());
+  Common::JoinIniKey(key, sizeof(key), base, name);
   sec->Get(key, &attachment_text, "");
 
   // First assume attachment string is a valid expression.
@@ -79,7 +79,7 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
   char key[INI_KEY_SIZE];
   SaveConfigDefault(sec, base);
 
-  if (!Common::JoinIniKey(key, sizeof(key), base, name.c_str()))
+  if (!Common::JoinIniKey(key, sizeof(key), base, name))
   {
   }
   else if (GetSelectionSetting().IsSimpleValue())

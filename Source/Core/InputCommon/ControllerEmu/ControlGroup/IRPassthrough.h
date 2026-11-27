@@ -13,7 +13,7 @@ namespace ControllerEmu
 class IRPassthrough : public ControlGroup
 {
 public:
-  IRPassthrough(std::string name, std::string ui_name);
+  IRPassthrough(const char* name, const char* ui_name);
 
   ControlState GetObjectPositionX(size_t object_index) const;
   ControlState GetObjectPositionY(size_t object_index) const;

@@ -56,9 +56,9 @@ public:
     Disabled,
   };
 
-  explicit ControlGroup(const std::string& name, GroupType type = GroupType::Other,
+  explicit ControlGroup(const char* name, GroupType type = GroupType::Other,
                         DefaultValue default_value = DefaultValue::AlwaysEnabled);
-  ControlGroup(std::string name, std::string ui_name, GroupType type = GroupType::Other,
+  ControlGroup(const char* name, const char* ui_name, GroupType type = GroupType::Other,
                DefaultValue default_value = DefaultValue::AlwaysEnabled);
   virtual ~ControlGroup();
 
@@ -73,9 +73,10 @@ public:
 
   void SetControlExpression(int index, const std::string& expression);
 
-  void AddInput(Translatability translate, std::string name);
-  void AddInput(Translatability translate, std::string name, std::string ui_name);
-  void AddOutput(Translatability translate, std::string name);
+  // The names are literals the controls lend
+  void AddInput(Translatability translate, const char* name);
+  void AddInput(Translatability translate, const char* name, const char* ui_name);
+  void AddOutput(Translatability translate, const char* name);
 
   template <typename T>
   void AddSetting(SettingValue<T>* value, const NumericSettingDetails& details,
@@ -97,8 +98,9 @@ public:
 
   bool HasEnabledSetting() const;
 
-  const std::string name;
-  const std::string ui_name;
+  // Literals the group lends, as every group's names are
+  const char* const name;
+  const char* const ui_name;
   const GroupType type;
 
 protected:

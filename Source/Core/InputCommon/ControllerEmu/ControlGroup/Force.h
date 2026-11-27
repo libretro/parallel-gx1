@@ -18,7 +18,7 @@ class Force : public ReshapableInput
 public:
   using StateData = Common::Vec3;
 
-  explicit Force(const std::string& name);
+  explicit Force(const char* name);
 
   ReshapeData GetReshapableState(bool adjusted) const;
   ControlState GetGateRadiusAtAngle(double ang) const;
@@ -49,7 +49,7 @@ class Shake : public ControlGroup
 public:
   using StateData = Common::Vec3;
 
-  explicit Shake(const std::string& name, ControlState default_intensity_scale = 1);
+  explicit Shake(const char* name, ControlState default_intensity_scale = 1);
 
   StateData GetState(bool adjusted = true) const;
 

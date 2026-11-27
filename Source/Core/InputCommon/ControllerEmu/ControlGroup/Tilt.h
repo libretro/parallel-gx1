@@ -19,7 +19,7 @@ class Tilt : public ReshapableInput
 public:
   using StateData = ReshapeData;
 
-  explicit Tilt(const std::string& name);
+  explicit Tilt(const char* name);
 
   ReshapeData GetReshapableState(bool adjusted) const;
   ControlState GetGateRadiusAtAngle(double angle) const;

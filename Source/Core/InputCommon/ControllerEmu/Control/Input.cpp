@@ -8,13 +8,13 @@
 
 namespace ControllerEmu
 {
-Input::Input(Translatability translate_, std::string name_, std::string ui_name_)
-    : Control(ControlReference::Kind::Input, translate_, std::move(name_), std::move(ui_name_))
+Input::Input(Translatability translate_, const char* name_, const char* ui_name_)
+    : Control(ControlReference::Kind::Input, translate_, name_, ui_name_)
 {
 }
 
-Input::Input(Translatability translate_, std::string name_)
-    : Control(ControlReference::Kind::Input, translate_, std::move(name_))
+Input::Input(Translatability translate_, const char* name_)
+    : Control(ControlReference::Kind::Input, translate_, name_)
 {
 }
 }  // namespace ControllerEmu

@@ -12,8 +12,8 @@
 
 namespace ControllerEmu
 {
-IRPassthrough::IRPassthrough(std::string name_, std::string ui_name_)
-    : ControlGroup(std::move(name_), std::move(ui_name_), GroupType::IRPassthrough,
+IRPassthrough::IRPassthrough(const char* name_, const char* ui_name_)
+    : ControlGroup(name_, ui_name_, GroupType::IRPassthrough,
                    ControlGroup::DefaultValue::Disabled)
 {
   AddInput(Translatability::Translate, _trans("Object 1 X"));

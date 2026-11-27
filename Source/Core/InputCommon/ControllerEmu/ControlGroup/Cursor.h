@@ -24,7 +24,7 @@ public:
     bool IsVisible() const;
   };
 
-  Cursor(std::string name, std::string ui_name);
+  Cursor(const char* name, const char* ui_name);
 
   ReshapeData GetReshapableState(bool adjusted) const;
   ControlState GetGateRadiusAtAngle(double ang) const;

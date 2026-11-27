@@ -11,7 +11,7 @@ namespace ControllerEmu
 class Input : public Control
 {
 public:
-  Input(Translatability translate, std::string name, std::string ui_name);
-  Input(Translatability translate, std::string name);
+  Input(Translatability translate, const char* name, const char* ui_name);
+  Input(Translatability translate, const char* name);
 };
 }  // namespace ControllerEmu

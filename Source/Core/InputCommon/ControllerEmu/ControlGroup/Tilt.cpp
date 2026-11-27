@@ -13,7 +13,7 @@
 
 namespace ControllerEmu
 {
-Tilt::Tilt(const std::string& name_)
+Tilt::Tilt(const char* name_)
     : ReshapableInput(name_, name_, GroupType::Tilt, ReshapeKind::Tilt)
 {
   AddInput(Translatability::Translate, _trans("Forward"));

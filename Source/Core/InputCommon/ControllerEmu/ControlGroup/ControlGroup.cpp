@@ -17,15 +17,15 @@
 
 namespace ControllerEmu
 {
-ControlGroup::ControlGroup(const std::string& name_, const GroupType type_,
+ControlGroup::ControlGroup(const char* name_, const GroupType type_,
                            DefaultValue default_value_)
     : ControlGroup{name_, name_, type_, default_value_}
 {
 }
 
-ControlGroup::ControlGroup(std::string name_, std::string ui_name_, const GroupType type_,
+ControlGroup::ControlGroup(const char* name_, const char* ui_name_, const GroupType type_,
                            DefaultValue default_value_)
-    : name(std::move(name_)), ui_name(std::move(ui_name_)), type(type_),
+    : name(name_), ui_name(ui_name_), type(type_),
       default_value(default_value_)
 {
   if (default_value_ != DefaultValue::AlwaysEnabled)
@@ -104,7 +104,7 @@ void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* 
 {
   char group[INI_KEY_SIZE];
   char key[INI_KEY_SIZE];
-  Common::JoinIniKey(group, sizeof(group), base, name.c_str(), "/");
+  Common::JoinIniKey(group, sizeof(group), base, name, "/");
 
   // enabled
   if (HasEnabledSetting())
@@ -120,14 +120,14 @@ void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* 
     {
       // control expression
       std::string expression;
-      Common::JoinIniKey(key, sizeof(key), group, c->name.c_str());
+      Common::JoinIniKey(key, sizeof(key), group, c->name);
       sec->Get(key, &expression, "");
       c->control_ref->SetExpression(std::move(expression));
     }
 
     // range
     double range = 100.0;
-    Common::JoinIniKey(key, sizeof(key), group, c->name.c_str(), "/Range");
+    Common::JoinIniKey(key, sizeof(key), group, c->name, "/Range");
     sec->Get(key, &range, 100.0);
     c->control_ref->SetRange(range / 100);
   }
@@ -137,7 +137,7 @@ void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const char* 
 {
   char group[INI_KEY_SIZE];
   char key[INI_KEY_SIZE];
-  Common::JoinIniKey(group, sizeof(group), base, name.c_str(), "/");
+  Common::JoinIniKey(group, sizeof(group), base, name, "/");
 
   // enabled
   if (HasEnabledSetting())
@@ -154,11 +154,11 @@ void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const char* 
     std::string expression = c->control_ref->GetExpression();
     // We can't save line breaks in a single line config. Restoring them is too complicated.
     ReplaceBreaksWithSpaces(expression);
-    if (Common::JoinIniKey(key, sizeof(key), group, c->name.c_str()))
+    if (Common::JoinIniKey(key, sizeof(key), group, c->name))
       sec->Set(key, expression, "");
 
     // range
-    if (Common::JoinIniKey(key, sizeof(key), group, c->name.c_str(), "/Range"))
+    if (Common::JoinIniKey(key, sizeof(key), group, c->name, "/Range"))
       sec->Set(key, c->control_ref->GetRange() * 100.0, 100.0);
   }
 }
@@ -182,19 +182,19 @@ void ControlGroup::SetControlExpression(int index, const std::string& expression
     controls[index]->control_ref->SetExpression(expression);
 }
 
-void ControlGroup::AddInput(Translatability translate, std::string name_)
+void ControlGroup::AddInput(Translatability translate, const char* name_)
 {
-  PushControl(new Input(translate, std::move(name_)));
+  PushControl(new Input(translate, name_));
 }
 
-void ControlGroup::AddInput(Translatability translate, std::string name_, std::string ui_name_)
+void ControlGroup::AddInput(Translatability translate, const char* name_, const char* ui_name_)
 {
-  PushControl(new Input(translate, std::move(name_), std::move(ui_name_)));
+  PushControl(new Input(translate, name_, ui_name_));
 }
 
-void ControlGroup::AddOutput(Translatability translate, std::string name_)
+void ControlGroup::AddOutput(Translatability translate, const char* name_)
 {
-  PushControl(new Output(translate, std::move(name_)));
+  PushControl(new Output(translate, name_));
 }
 
 bool ControlGroup::HasEnabledSetting() const

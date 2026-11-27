@@ -14,7 +14,7 @@ namespace ControllerEmu
 class IMUCursor : public ControlGroup
 {
 public:
-  IMUCursor(std::string name, std::string ui_name);
+  IMUCursor(const char* name, const char* ui_name);
 
   // Yaw movement in radians.
   ControlState GetTotalYaw() const;

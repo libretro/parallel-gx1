@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <string>
 
 #include "InputCommon/ControlReference/ControlReference.h"
 
@@ -33,13 +32,14 @@ private:
 public:
   ControlReference* const control_ref;
   const Translatability translate;
-  const std::string name;
-  const std::string ui_name;
+  // Literals the control lends, as every control's names are
+  const char* const name;
+  const char* const ui_name;
 
 protected:
-  Control(ControlReference::Kind kind, Translatability translate, std::string name,
-          std::string ui_name);
-  Control(ControlReference::Kind kind, Translatability translate, std::string name);
+  Control(ControlReference::Kind kind, Translatability translate, const char* name,
+          const char* ui_name);
+  Control(ControlReference::Kind kind, Translatability translate, const char* name);
 };
 
 }  // namespace ControllerEmu

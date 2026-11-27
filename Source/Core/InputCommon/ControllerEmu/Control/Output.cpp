@@ -8,8 +8,8 @@
 
 namespace ControllerEmu
 {
-Output::Output(Translatability translate_, std::string name_)
-    : Control(ControlReference::Kind::Output, translate_, std::move(name_))
+Output::Output(Translatability translate_, const char* name_)
+    : Control(ControlReference::Kind::Output, translate_, name_)
 {
 }
 }  // namespace ControllerEmu

@@ -14,8 +14,8 @@ namespace ControllerEmu
 class Buttons : public ControlGroup
 {
 public:
-  explicit Buttons(const std::string& name_);
-  Buttons(std::string ini_name, std::string group_name);
+  explicit Buttons(const char* name_);
+  Buttons(const char* ini_name, const char* group_name);
 
   template <typename C>
   void GetState(C* const buttons, const C* bitmasks) const

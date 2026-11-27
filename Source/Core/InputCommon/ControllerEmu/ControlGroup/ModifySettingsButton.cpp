@@ -11,16 +11,16 @@
 
 namespace ControllerEmu
 {
-ModifySettingsButton::ModifySettingsButton(const std::string& button_name) : Buttons(button_name)
+ModifySettingsButton::ModifySettingsButton(const char* button_name) : Buttons(button_name)
 {
 }
 
-void ModifySettingsButton::AddInput(std::string button_name, bool toggle)
+void ModifySettingsButton::AddInput(const char* button_name, bool toggle)
 {
   if (num_controls >= MAX_HOTKEYS)
     return;
   m_hotkeys[num_controls].toggle = toggle;
-  ControlGroup::AddInput(Translatability::Translate, std::move(button_name));
+  ControlGroup::AddInput(Translatability::Translate, button_name);
 }
 
 void ModifySettingsButton::UpdateState()
@@ -45,9 +45,9 @@ void ModifySettingsButton::UpdateState()
         hotkey->active = !hotkey->active;
 
         if (hotkey->active)
-          Core::DisplayMessage("%s: on", controls[i]->ui_name.c_str());
+          Core::DisplayMessage("%s: on", controls[i]->ui_name);
         else
-          Core::DisplayMessage("%s: off", controls[i]->ui_name.c_str());
+          Core::DisplayMessage("%s: off", controls[i]->ui_name);
 
         hotkey->threshold_passed = true;
       }

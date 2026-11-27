@@ -13,7 +13,7 @@ namespace ControllerEmu
 class MixedTriggers : public ControlGroup
 {
 public:
-  explicit MixedTriggers(const std::string& name);
+  explicit MixedTriggers(const char* name);
 
   void GetState(u16* digital, const u16* bitmasks, ControlState* analog,
                 bool adjusted = true) const;
