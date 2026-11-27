@@ -14,7 +14,6 @@
 
 #include <cstddef>
 #include <cstring>
-#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -55,12 +54,6 @@ public:
   bool IsWriteMode() const { return m_mode == Mode::Write; }
   bool IsMeasureMode() const { return m_mode == Mode::Measure; }
   bool IsVerifyMode() const { return m_mode == Mode::Verify; }
-
-  template <typename T>
-  void Do(std::basic_string<T>& x)
-  {
-    DoContiguousContainer(x);
-  }
 
   // A terminated string, kept as its u32 length and its bytes as a std::string is. Read mode
   // keeps what fits in the buffer of size bytes, terminated, and passes over the rest.
@@ -248,17 +241,6 @@ public:
   }
 
 private:
-  template <typename T>
-  void DoContiguousContainer(T& container)
-  {
-    u32 size = static_cast<u32>(container.size());
-    Do(size);
-    container.resize(size);
-
-    if (size > 0)
-      DoArray(&container[0], size);
-  }
-
   DOLPHIN_FORCE_INLINE void DoVoid(void* data, u32 size)
   {
     if (!IsMeasureMode() && (*m_ptr_current + size) > m_ptr_end)
