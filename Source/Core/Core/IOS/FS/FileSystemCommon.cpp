@@ -3,7 +3,6 @@
 
 #include "Core/IOS/FS/FileSystem.h"
 
-#include <algorithm>
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
@@ -17,21 +16,16 @@
 
 namespace IOS::HLE::FS
 {
-bool IsValidPath(std::string_view path)
+bool IsValidPath(const char* path)
 {
-  return path == "/" || IsValidNonRootPath(path);
+  return !std::strcmp(path, "/") || IsValidNonRootPath(path);
 }
 
-bool IsValidNonRootPath(std::string_view path)
+bool IsValidNonRootPath(const char* path)
 {
-  return path.length() > 1 && path.length() <= MaxPathLength && path[0] == '/' &&
-         path.back() != '/';
-}
-
-bool IsValidFilename(std::string_view filename)
-{
-  return filename.length() <= MaxFilenameLength &&
-         !std::ranges::any_of(filename, [](char c) { return c == '/'; });
+  // one past the longest valid length is enough to tell
+  const size_t length = strnlen(path, MaxPathLength + 1);
+  return length > 1 && length <= MaxPathLength && path[0] == '/' && path[length - 1] != '/';
 }
 
 void FreeDirectoryList(DirectoryList* list)

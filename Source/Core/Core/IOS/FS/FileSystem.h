@@ -4,10 +4,6 @@
 #pragma once
 
 #include <expected>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <vector>
 
 #ifdef _WIN32
 // TODO: Horrible hack, remove ASAP!
@@ -158,9 +154,8 @@ constexpr size_t MaxPathLength = 64;
 constexpr size_t MaxFilenameLength = 12;
 
 /// Returns whether a Wii path is valid.
-bool IsValidPath(std::string_view path);
-bool IsValidNonRootPath(std::string_view path);
-bool IsValidFilename(std::string_view filename);
+bool IsValidPath(const char* path);
+bool IsValidNonRootPath(const char* path);
 
 /// The names in a directory, owned by the list; release it with FreeDirectoryList.
 struct DirectoryList
