@@ -18,6 +18,7 @@
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
+#include "Common/CommonPaths.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
@@ -32,12 +33,12 @@ namespace IOS::HLE::FS
 {
 bool FileSystem::BuildFilename(const char* wii_path, char* out, size_t out_size) const
 {
-  ASSERT(!m_root_path.empty());
+  ASSERT(m_root_path && *m_root_path);
 
-  const size_t root_length = m_root_path.size();
+  const size_t root_length = std::strlen(m_root_path);
   if (root_length >= out_size)
     return false;
-  std::memcpy(out, m_root_path.c_str(), root_length + 1);
+  std::memcpy(out, m_root_path, root_length + 1);
   if (wii_path[0] == '/')
     return Common::EscapePathTo(wii_path, out + root_length, out_size - root_length);
 
@@ -86,42 +87,57 @@ static void CopyMetadataFields(D* dst, const S& src)
   dst->attribute = src.attribute;
 }
 
-// Convert the host directory entries into ones that can be exposed to the emulated system.
-static u64 FixupDirectoryEntries(File::FSTEntry* dir, bool is_root)
+// The entries and the clusters of their files under the directory whose host path is the length
+// chars in path, a buffer of path_size their paths are built in, as the emulated system
+// sees them: escaped invalid file system characters decoded, and entries whose names are then
+// too long left out with what is under them, as are the files in the root of the Wii NAND
+// folder, where we store extra files the emulated system shouldn't know about.
+static void CountDirectoryEntries(char* path, size_t path_size, size_t length, bool is_root,
+                                  u64* entries, u64* clusters)
 {
-  u64 removed_entries = 0;
-  for (auto it = dir->children.begin(); it != dir->children.end();)
+  struct RDIR* dir;
+  path[length] = '\0';
+  dir = retro_opendir_include_hidden(path, true);
+  if (!dir)
+    return;
+  if (length && path[length - 1] != DIR_SEP_CHR)
+    path[length++] = DIR_SEP_CHR;
+  while (retro_readdir(dir))
   {
-    // Drop files in the root of the Wii NAND folder, since we store extra files there that the
-    // emulated system shouldn't know about.
-    if (is_root && !it->isDirectory)
-    {
-      ++removed_entries;
-      it = dir->children.erase(it);
+    const char* const name = retro_dirent_get_name(dir);
+    size_t name_length;
+    bool is_dir;
+    if (!name || (name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2]))))
       continue;
-    }
+    is_dir = retro_dirent_is_dir(dir, nullptr);
+    if (is_root && !is_dir)
+      continue;
 
+    name_length = std::strlen(name);
+    if (length + name_length >= path_size)
+      continue;
+    std::memcpy(path + length, name, name_length + 1);
     // Decode escaped invalid file system characters so that games (such as Harry Potter and the
     // Half-Blood Prince) can find what they expect.
-    it->virtualName.resize(Common::UnescapeFileName(&it->virtualName[0], it->virtualName.size()));
-
-    // Drop files that have too long filenames.
-    if (!IsValidFilename(it->virtualName))
-    {
-      if (it->isDirectory)
-        removed_entries += it->size;
-      ++removed_entries;
-      it = dir->children.erase(it);
+    const size_t unescaped_length = Common::UnescapeFileName(path + length, name_length);
+    if (unescaped_length > MaxFilenameLength || std::memchr(path + length, '/', unescaped_length))
       continue;
+
+    ++*entries;
+    if (is_dir)
+    {
+      // the name again, as decoding rewrote it
+      std::memcpy(path + length, name, name_length + 1);
+      CountDirectoryEntries(path, path_size, length + name_length, false, entries, clusters);
     }
-
-    if (dir->isDirectory)
-      removed_entries += FixupDirectoryEntries(&*it, false);
-
-    ++it;
+    else
+    {
+      int64_t size = 0;
+      if (retro_dirent_stat(dir, &size, nullptr) && size > 0)
+        *clusters += Common::AlignUp(u64(size), CLUSTER_SIZE) / CLUSTER_SIZE;
+    }
   }
-  dir->size -= removed_entries;
-  return removed_entries;
+  retro_closedir(dir);
 }
 }  // namespace
 
@@ -192,11 +208,21 @@ static void SetFstName(char* out, const char* name, size_t name_length)
   out[name_length] = '\0';
 }
 
-FileSystem::FileSystem(std::string root_path) : m_root_path{std::move(root_path)}
+FileSystem::FileSystem(const char* root_path)
 {
-  while (m_root_path.ends_with('/'))
-    m_root_path.pop_back();
-  File::CreateFullPath(m_root_path + '/');
+  size_t length = std::strlen(root_path);
+  while (length && root_path[length - 1] == '/')
+    length--;
+  // with room for the '/' CreateFullPath wants
+  m_root_path = static_cast<char*>(std::malloc(length + 2));
+  if (m_root_path)
+  {
+    std::memcpy(m_root_path, root_path, length);
+    m_root_path[length] = '/';
+    m_root_path[length + 1] = '\0';
+    File::CreateFullPath(m_root_path);
+    m_root_path[length] = '\0';
+  }
   ResetFst();
   LoadFst();
 }
@@ -205,11 +231,14 @@ FileSystem::~FileSystem()
 {
   CloseAllHandles();
   FreeFstChildren(&m_root_entry);
+  std::free(m_root_path);
 }
 
-std::string FileSystem::GetFstFilePath() const
+bool FileSystem::BuildFstFilePath(char* out, size_t out_size, bool temp) const
 {
-  return StringFromFormat("%s/fst.bin", m_root_path.c_str());
+  const int length =
+      snprintf(out, out_size, "%s/fst.bin%s", m_root_path ? m_root_path : "", temp ? ".xxx" : "");
+  return length >= 0 && size_t(length) < out_size;
 }
 
 void FileSystem::ResetFst()
@@ -223,7 +252,8 @@ void FileSystem::ResetFst()
 
 void FileSystem::LoadFst()
 {
-  File::IOFile file{GetFstFilePath(), "rb"};
+  char fst_path[HOST_PATH_SIZE];
+  File::IOFile file{BuildFstFilePath(fst_path, sizeof(fst_path), false) ? fst_path : "", "rb"};
   // Existing filesystems will not have a FST. This is not a problem,
   // as the rest of FileSystem will use sane defaults.
   if (!file)
@@ -290,8 +320,16 @@ void FileSystem::SaveFst()
   };
   collect_entries(collect_entries, m_root_entry);
 
-  const std::string dest_path = GetFstFilePath();
-  const std::string temp_path = File::GetTempFilenameForAtomicWrite(dest_path);
+  char* const dest_path = static_cast<char*>(std::malloc(2 * HOST_PATH_SIZE));
+  char* const temp_path = dest_path + HOST_PATH_SIZE;
+  if (!dest_path || !BuildFstFilePath(dest_path, HOST_PATH_SIZE, false) ||
+      !BuildFstFilePath(temp_path, HOST_PATH_SIZE, true))
+  {
+    std::free(to_write);
+    std::free(dest_path);
+    PanicAlert("IOS_FS: Failed to write new FST");
+    return;
+  }
   {
     // This temporary file must be closed before it can be renamed.
     File::IOFile file{temp_path, "wb"};
@@ -299,12 +337,14 @@ void FileSystem::SaveFst()
     std::free(to_write);
     if (!ok)
     {
+      std::free(dest_path);
       PanicAlert("IOS_FS: Failed to write new FST");
       return;
     }
   }
   if (!File::Rename(temp_path, dest_path))
     PanicAlert("IOS_FS: Failed to rename temporary FST file");
+  std::free(dest_path);
 }
 
 FileSystem::FstEntry* FileSystem::GetFstEntryForPath(const char* path)
@@ -441,7 +481,7 @@ ResultCode FileSystem::Format(Uid uid)
 {
   if (uid != 0)
     return ResultCode::AccessDenied;
-  if (m_root_path.empty())
+  if (!m_root_path || !*m_root_path)
     return ResultCode::AccessDenied;
   char root[HOST_PATH_SIZE];
   if (!BuildFilename("/", root, sizeof(root)) || !File::DeleteDirRecursively(root) ||
@@ -898,19 +938,6 @@ ResultCode FileSystem::SetMetadata(Uid caller_uid, const char* path, Uid uid, Gi
   return ResultCode::Success;
 }
 
-static u64 ComputeUsedClusters(const File::FSTEntry& parent_entry)
-{
-  u64 clusters = 0;
-  for (const File::FSTEntry& entry : parent_entry.children)
-  {
-    if (entry.isDirectory)
-      clusters += ComputeUsedClusters(entry);
-    else
-      clusters += Common::AlignUp(entry.size, CLUSTER_SIZE) / CLUSTER_SIZE;
-  }
-  return clusters;
-}
-
 Result<NandStats> FileSystem::GetNandStats()
 {
   const auto root_stats = GetDirectoryStats("/");
@@ -957,12 +984,18 @@ Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const char*
   }
   if (info.IsDirectory())
   {
-    File::FSTEntry parent_dir = File::ScanDirectoryTree(path, true);
-    FixupDirectoryEntries(&parent_dir, !std::strcmp(wii_path, "/"));
+    u64 entries = 0;
+    u64 clusters = 0;
+    // the path without its trailing separators
+    size_t length = std::strlen(path);
+    while (length > 1 && path[length - 1] == DIR_SEP_CHR)
+      length--;
+    CountDirectoryEntries(path, sizeof(path), length, !std::strcmp(wii_path, "/"), &entries,
+                          &clusters);
 
     // add one for the folder itself
-    stats.used_inodes = 1 + parent_dir.size;
-    stats.used_clusters = ComputeUsedClusters(parent_dir);
+    stats.used_inodes = 1 + entries;
+    stats.used_clusters = clusters;
   }
   else
   {

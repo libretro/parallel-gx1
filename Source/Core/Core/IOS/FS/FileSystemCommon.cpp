@@ -60,9 +60,9 @@ void SplitPathAndBasename(const char* path, SplitPathResult* out)
 
 FileSystem* MakeFileSystem(Location location)
 {
-  const std::string nand_root =
-      File::GetUserPath(location == Location::Session ? D_SESSION_WIIROOT_IDX : D_WIIROOT_IDX);
-  return new FileSystem(nand_root);
+  return new FileSystem(
+      File::GetUserPath(location == Location::Session ? D_SESSION_WIIROOT_IDX : D_WIIROOT_IDX)
+          .c_str());
 }
 
 IOS::HLE::ReturnCode ConvertResult(ResultCode code)

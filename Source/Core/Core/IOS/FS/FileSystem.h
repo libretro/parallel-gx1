@@ -219,7 +219,7 @@ public:
   ///
   /// Ignores metadata like permissions, attributes and various checks and also
   /// sometimes returns wrong information because metadata is not available.
-  explicit FileSystem(std::string root_path);
+  explicit FileSystem(const char* root_path);
   ~FileSystem();
 
   void DoState(PointerWrap& p);
@@ -354,7 +354,8 @@ private:
   bool IsFileOpened(const char* path) const;
   bool IsDirectoryInUse(const char* path) const;
 
-  std::string GetFstFilePath() const;
+  // root/fst.bin, then ".xxx" for the file it is written to first when temp is set
+  bool BuildFstFilePath(char* out, size_t out_size, bool temp) const;
   void ResetFst();
   void LoadFst();
   void SaveFst();
@@ -372,7 +373,7 @@ private:
   /// and we do not want FS to break if the user adds or removes files in their
   /// filesystem root manually.
   FstEntry m_root_entry{};  // its children are freed with the file system
-  std::string m_root_path;
+  char* m_root_path = nullptr;  // owned, without a trailing separator
   HostFile m_host_files[NUM_HANDLES];
   Handle m_handles[NUM_HANDLES];
 };
