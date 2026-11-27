@@ -18,7 +18,7 @@
 
 namespace IOS::HLE
 {
-OH0::OH0(EmulationKernel& ios, const std::string& device_name) : USBHost(ios, device_name)
+OH0::OH0(EmulationKernel& ios, const char* device_name) : USBHost(ios, device_name)
 {
 }
 

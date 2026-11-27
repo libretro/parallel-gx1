@@ -260,7 +260,7 @@ private:
 class ESDevice final : public EmulationDevice
 {
 public:
-  ESDevice(EmulationKernel& ios, ESCore& core, const std::string& device_name);
+  ESDevice(EmulationKernel& ios, ESCore& core, const char* device_name);
   ESDevice(const ESDevice& other) = delete;
   ESDevice(ESDevice&& other) = delete;
   ESDevice& operator=(const ESDevice& other) = delete;

@@ -139,14 +139,18 @@ struct IOCtlRequest final : Request
   u32 buffer_out = 0;
   u32 buffer_out_size = 0;
   IOCtlRequest(Core::System& system, u32 address);
-  void Log(std::string_view description, Common::Log::LogType type = Common::Log::LogType::IOS,
+  void Log(const char* description, Common::Log::LogType type = Common::Log::LogType::IOS,
            Common::Log::LogLevel level = Common::Log::LogLevel::LINFO) const;
-  void Dump(Core::System& system, const std::string& description,
+  void Dump(Core::System& system, const char* description,
             Common::Log::LogType type = Common::Log::LogType::IOS,
             Common::Log::LogLevel level = Common::Log::LogLevel::LINFO) const;
-  void DumpUnknown(Core::System& system, const std::string& description,
+  void DumpUnknown(Core::System& system, const char* description,
                    Common::Log::LogType type = Common::Log::LogType::IOS,
                    Common::Log::LogLevel level = Common::Log::LogLevel::LERROR) const;
+
+private:
+  void DumpPrefixed(Core::System& system, const char* prefix, const char* description,
+                    Common::Log::LogType type, Common::Log::LogLevel level) const;
 };
 
 struct IOCtlVRequest final : Request
@@ -192,12 +196,16 @@ struct IOCtlVRequest final : Request
 
   IOCtlVRequest(Core::System& system, u32 address);
   bool HasNumberOfValidVectors(size_t in_count, size_t io_count) const;
-  void Dump(Core::System& system, std::string_view description,
+  void Dump(Core::System& system, const char* description,
             Common::Log::LogType type = Common::Log::LogType::IOS,
             Common::Log::LogLevel level = Common::Log::LogLevel::LINFO) const;
-  void DumpUnknown(Core::System& system, const std::string& description,
+  void DumpUnknown(Core::System& system, const char* description,
                    Common::Log::LogType type = Common::Log::LogType::IOS,
                    Common::Log::LogLevel level = Common::Log::LogLevel::LERROR) const;
+
+private:
+  void DumpPrefixed(Core::System& system, const char* prefix, const char* description,
+                    Common::Log::LogType type, Common::Log::LogLevel level) const;
 };
 
 class Device
@@ -209,12 +217,14 @@ public:
     OH0,     // OH0 child devices which are created dynamically.
   };
 
-  Device(Kernel& ios, std::string device_name, DeviceType type = DeviceType::Static);
+  // device names fit in NAME_SIZE, terminator included; a longer one is cut
+  static constexpr size_t NAME_SIZE = 64;
+  Device(Kernel& ios, const char* device_name, DeviceType type = DeviceType::Static);
 
   virtual ~Device() = default;
   virtual void DoState(PointerWrap& p);
 
-  const std::string& GetDeviceName() const { return m_name; }
+  const char* GetDeviceName() const { return m_name; }
   // Replies to Open and Close requests are sent by the IPC request handler (HandleCommand),
   // not by the devices themselves.
   virtual IPCReply Open(const OpenRequest& request);
@@ -231,7 +241,7 @@ public:
 protected:
   Kernel& m_ios;
 
-  std::string m_name;
+  char m_name[NAME_SIZE];
   // STATE_TO_SAVE
   DeviceType m_device_type;
   bool m_is_active = false;
@@ -246,7 +256,7 @@ private:
 class EmulationDevice : public Device
 {
 public:
-  EmulationDevice(EmulationKernel& ios, const std::string& device_name,
+  EmulationDevice(EmulationKernel& ios, const char* device_name,
                   DeviceType type = DeviceType::Static)
       : Device(ios, device_name, type)
   {

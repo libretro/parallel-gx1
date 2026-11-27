@@ -21,7 +21,7 @@ namespace IOS::HLE
 class SDIOSlot0Device : public EmulationDevice
 {
 public:
-  SDIOSlot0Device(EmulationKernel& ios, const std::string& device_name);
+  SDIOSlot0Device(EmulationKernel& ios, const char* device_name);
   ~SDIOSlot0Device() override;
 
   void DoState(PointerWrap& p) override;

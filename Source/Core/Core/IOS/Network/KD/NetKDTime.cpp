@@ -16,7 +16,7 @@
 
 namespace IOS::HLE
 {
-NetKDTimeDevice::NetKDTimeDevice(EmulationKernel& ios, const std::string& device_name)
+NetKDTimeDevice::NetKDTimeDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 }

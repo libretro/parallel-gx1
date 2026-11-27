@@ -37,7 +37,7 @@ namespace IOS::HLE
 class DIDevice : public EmulationDevice
 {
 public:
-  DIDevice(EmulationKernel& ios, const std::string& device_name);
+  DIDevice(EmulationKernel& ios, const char* device_name);
   ~DIDevice() override;
 
   static void InterruptFromDVDInterface(DVD::DIInterruptType interrupt_type);

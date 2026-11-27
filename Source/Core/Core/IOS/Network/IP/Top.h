@@ -68,7 +68,7 @@ enum NET_IOCTL
 class NetIPTopDevice : public EmulationDevice
 {
 public:
-  NetIPTopDevice(EmulationKernel& ios, const std::string& device_name);
+  NetIPTopDevice(EmulationKernel& ios, const char* device_name);
 
   void DoState(PointerWrap& p) override;
   IPCReply IOCtl(const IOCtlRequest& request) override;

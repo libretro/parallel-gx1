@@ -141,7 +141,7 @@ private:
 class FSDevice final : public EmulationDevice
 {
 public:
-  FSDevice(EmulationKernel& ios, FSCore& core, const std::string& device_name);
+  FSDevice(EmulationKernel& ios, FSCore& core, const char* device_name);
   ~FSDevice() override;
 
   void DoState(PointerWrap& p) override;

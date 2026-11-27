@@ -28,7 +28,7 @@ std::string NativePath(const std::string& wfs_path)
 }
 }  // namespace WFS
 
-WFSSRVDevice::WFSSRVDevice(EmulationKernel& ios, const std::string& device_name)
+WFSSRVDevice::WFSSRVDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   m_device_name = "msc01";

@@ -13,7 +13,7 @@ namespace IOS::HLE
 class NetKDTimeDevice : public EmulationDevice
 {
 public:
-  NetKDTimeDevice(EmulationKernel& ios, const std::string& device_name);
+  NetKDTimeDevice(EmulationKernel& ios, const char* device_name);
   ~NetKDTimeDevice() override;
 
   IPCReply IOCtl(const IOCtlRequest& request) override;

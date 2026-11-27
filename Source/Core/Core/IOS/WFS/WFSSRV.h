@@ -30,7 +30,7 @@ enum
 class WFSSRVDevice : public EmulationDevice
 {
 public:
-  WFSSRVDevice(EmulationKernel& ios, const std::string& device_name);
+  WFSSRVDevice(EmulationKernel& ios, const char* device_name);
   ~WFSSRVDevice() override;
 
   IPCReply IOCtl(const IOCtlRequest& request) override;

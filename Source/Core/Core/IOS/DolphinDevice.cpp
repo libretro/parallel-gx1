@@ -191,7 +191,7 @@ IPCReply DolphinDevice::GetSystemTime(const IOCtlVRequest& request) const
   return IPCReply(IPC_SUCCESS);
 }
 
-DolphinDevice::DolphinDevice(EmulationKernel& ios, const std::string& device_name)
+DolphinDevice::DolphinDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   m_timer.Start();

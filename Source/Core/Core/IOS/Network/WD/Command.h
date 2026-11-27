@@ -49,7 +49,7 @@ public:
     DriverError = 0x80008003,
   };
 
-  NetWDCommandDevice(EmulationKernel& ios, const std::string& device_name);
+  NetWDCommandDevice(EmulationKernel& ios, const char* device_name);
   ~NetWDCommandDevice() override;
 
   IPCReply Open(const OpenRequest& request) override;

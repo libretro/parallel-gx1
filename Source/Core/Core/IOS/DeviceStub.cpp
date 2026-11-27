@@ -9,20 +9,20 @@ namespace IOS::HLE
 {
 IPCReply DeviceStub::Open(const OpenRequest& request)
 {
-  WARN_LOG(IOS, "%s faking Open()", m_name.c_str());
+  WARN_LOG(IOS, "%s faking Open()", m_name);
   m_is_active = true;
   return IPCReply(IPC_SUCCESS);
 }
 
 IPCReply DeviceStub::IOCtl(const IOCtlRequest& request)
 {
-  WARN_LOG(IOS, "%s faking IOCtl()", m_name.c_str());
+  WARN_LOG(IOS, "%s faking IOCtl()", m_name);
   return IPCReply(IPC_SUCCESS);
 }
 
 IPCReply DeviceStub::IOCtlV(const IOCtlVRequest& request)
 {
-  WARN_LOG(IOS, "%s faking IOCtlV()", m_name.c_str());
+  WARN_LOG(IOS, "%s faking IOCtlV()", m_name);
   return IPCReply(IPC_SUCCESS);
 }
 }  // namespace IOS::HLE

@@ -593,18 +593,18 @@ void EmulationKernel::InitIPC()
 void EmulationKernel::AddDevice(Device* device)
 {
   ASSERT(device->GetDeviceType() == Device::DeviceType::Static);
-  const char* const name = device->GetDeviceName().c_str();
+  const char* const name = device->GetDeviceName();
 
   // The first entry not ordered before name.
   u32 index = 0;
   while (index != m_device_count &&
-         std::strcmp(m_devices[index].device->GetDeviceName().c_str(), name) < 0)
+         std::strcmp(m_devices[index].device->GetDeviceName(), name) < 0)
   {
     index++;
   }
 
   if (index != m_device_count &&
-      std::strcmp(m_devices[index].device->GetDeviceName().c_str(), name) == 0)
+      std::strcmp(m_devices[index].device->GetDeviceName(), name) == 0)
   {
     delete m_devices[index].device;
   }
@@ -723,7 +723,7 @@ Device* EmulationKernel::GetDeviceByName(const char* device_name)
   while (low < high)
   {
     const u32 mid = low + (high - low) / 2;
-    const int order = std::strcmp(m_devices[mid].device->GetDeviceName().c_str(), device_name);
+    const int order = std::strcmp(m_devices[mid].device->GetDeviceName(), device_name);
     if (order == 0)
       return m_devices[mid].device;
     if (order < 0)
@@ -1016,7 +1016,7 @@ void EmulationKernel::DoState(PointerWrap& p)
         if (device_type == Device::Device::DeviceType::Static)
         {
           // written, which leaves it as it is
-          p.DoCString(const_cast<char*>(descriptor->GetDeviceName().c_str()), 0);
+          p.DoCString(const_cast<char*>(descriptor->GetDeviceName()), 0);
         }
         else
         {

@@ -17,7 +17,7 @@ class OH0;
 class OH0Device final : public EmulationDevice
 {
 public:
-  OH0Device(EmulationKernel& ios, const std::string& device_name);
+  OH0Device(EmulationKernel& ios, const char* device_name);
 
   IPCReply Open(const OpenRequest& request) override;
   IPCReply Close(u32 fd) override;

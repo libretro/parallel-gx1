@@ -171,7 +171,7 @@ void CryptOFB(const u8* key, u8* iv, const u8* in, u8* out, size_t size)
 }
 }  // Anonymous namespace
 
-NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& device_name,
+NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const char* device_name,
                                        NetKDTimeDevice* time_device)
     : EmulationDevice(ios, device_name), m_config{ios.GetFS()}, m_dl_list{ios.GetFS()},
       m_send_list{ios.GetFS()}, m_friend_list{ios.GetFS()}, m_time_device{time_device}

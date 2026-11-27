@@ -20,7 +20,7 @@
 
 namespace IOS::HLE
 {
-USB_HIDv4::USB_HIDv4(EmulationKernel& ios, const std::string& device_name)
+USB_HIDv4::USB_HIDv4(EmulationKernel& ios, const char* device_name)
     : USBHost(ios, device_name)
 {
 }

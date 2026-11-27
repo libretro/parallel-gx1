@@ -23,7 +23,7 @@ RETRO_DEQUE_DEFINE(usb_kbd_messages, USBKeyboardMessage);
 class USB_KBD : public EmulationDevice
 {
 public:
-  USB_KBD(EmulationKernel& ios, const std::string& device_name);
+  USB_KBD(EmulationKernel& ios, const char* device_name);
   ~USB_KBD() override;
 
   IPCReply Open(const OpenRequest& request) override;

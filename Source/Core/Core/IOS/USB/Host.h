@@ -20,7 +20,7 @@ namespace IOS::HLE
 class USBHost : public EmulationDevice
 {
 public:
-  USBHost(EmulationKernel& ios, const std::string& device_name);
+  USBHost(EmulationKernel& ios, const char* device_name);
   ~USBHost() override;
 
   IPCReply Open(const OpenRequest& request) override;

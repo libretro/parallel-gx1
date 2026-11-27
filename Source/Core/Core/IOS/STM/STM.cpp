@@ -48,19 +48,19 @@ IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
   }
 
   case IOCTL_STM_HOTRESET:
-    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName());
     INFO_LOG(IOS_STM, "    IOCTL_STM_HOTRESET");
     break;
 
   case IOCTL_STM_VIDIMMING:  // (Input: 20 bytes, Output: 20 bytes)
-    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName());
     INFO_LOG(IOS_STM, "    IOCTL_STM_VIDIMMING");
     // memory.Write_U32(1, buffer_out);
     // return_value = 1;
     break;
 
   case IOCTL_STM_LEDMODE:  // (Input: 20 bytes, Output: 20 bytes)
-    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName());
     INFO_LOG(IOS_STM, "    IOCTL_STM_LEDMODE");
     break;
 
@@ -72,7 +72,7 @@ IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
   case IOCTL_STM_LEDFLASH:
   case IOCTL_STM_READVER:
   case IOCTL_STM_WRITEDMCU:
-    ERROR_LOG(IOS_STM, "%s - Unimplemented IOCtl: %u", GetDeviceName().c_str(), request.request);
+    ERROR_LOG(IOS_STM, "%s - Unimplemented IOCtl: %u", GetDeviceName(), request.request);
     break;
 
   default:

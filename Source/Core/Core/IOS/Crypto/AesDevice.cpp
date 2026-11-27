@@ -16,7 +16,7 @@
 
 namespace IOS::HLE
 {
-AesDevice::AesDevice(EmulationKernel& ios, const std::string& device_name)
+AesDevice::AesDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 }

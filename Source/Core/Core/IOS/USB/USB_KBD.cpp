@@ -184,7 +184,7 @@ USB_KBD::MessageData::MessageData(MessageType type, u8 modifiers_, const u8* pre
 
 // TODO: support in netplay/movies.
 
-USB_KBD::USB_KBD(EmulationKernel& ios, const std::string& device_name)
+USB_KBD::USB_KBD(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   usb_kbd_messages_init(&m_message_queue, 16);

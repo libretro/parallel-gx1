@@ -31,7 +31,7 @@ namespace IOS::HLE
 class NetKDRequestDevice : public EmulationDevice
 {
 public:
-  NetKDRequestDevice(EmulationKernel& ios, const std::string& device_name,
+  NetKDRequestDevice(EmulationKernel& ios, const char* device_name,
                      NetKDTimeDevice* time_device);
   IPCReply HandleNWC24DownloadNowEx(const IOCtlRequest& request);
   NWC24::ErrorCode KDDownload(const u16 entry_index, s32 subtask_id);

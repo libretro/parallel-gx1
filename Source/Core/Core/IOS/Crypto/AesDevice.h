@@ -10,7 +10,7 @@ namespace IOS::HLE
 class AesDevice final : public EmulationDevice
 {
 public:
-  AesDevice(EmulationKernel& ios, const std::string& device_name);
+  AesDevice(EmulationKernel& ios, const char* device_name);
   IPCReply Open(const OpenRequest& request) override;
   ~AesDevice() override;
   IPCReply IOCtlV(const IOCtlVRequest& request) override;

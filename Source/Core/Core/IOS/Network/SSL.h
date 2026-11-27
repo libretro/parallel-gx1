@@ -85,7 +85,7 @@ struct WII_SSL
 class NetSSLDevice : public EmulationDevice
 {
 public:
-  NetSSLDevice(EmulationKernel& ios, const std::string& device_name);
+  NetSSLDevice(EmulationKernel& ios, const char* device_name);
 
   ~NetSSLDevice() override;
 

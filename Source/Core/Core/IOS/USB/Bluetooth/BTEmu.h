@@ -49,7 +49,7 @@ RETRO_DEQUE_DEFINE(acl_packets, ACLQueuedPacket);
 class BluetoothEmuDevice final : public BluetoothBaseDevice
 {
 public:
-  BluetoothEmuDevice(EmulationKernel& ios, const std::string& device_name);
+  BluetoothEmuDevice(EmulationKernel& ios, const char* device_name);
 
   ~BluetoothEmuDevice() override;
 

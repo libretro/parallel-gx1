@@ -15,7 +15,7 @@ namespace IOS::HLE
 class NetNCDManageDevice : public EmulationDevice
 {
 public:
-  NetNCDManageDevice(EmulationKernel& ios, const std::string& device_name);
+  NetNCDManageDevice(EmulationKernel& ios, const char* device_name);
 
   IPCReply IOCtlV(const IOCtlVRequest& request) override;
 

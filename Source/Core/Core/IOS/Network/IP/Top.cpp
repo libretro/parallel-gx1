@@ -88,7 +88,7 @@ const char* GaiStrError(s32 error)
 }
 }  // namespace
 
-NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const std::string& device_name)
+NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 #if defined(SKIP_NETWORK_WORKER_THREAD)

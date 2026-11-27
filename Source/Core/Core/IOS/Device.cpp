@@ -7,6 +7,8 @@
 #include <cinttypes>
 #include <utility>
 
+#include <compat/strl.h>
+
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/HW/Memmap.h"
@@ -130,20 +132,26 @@ bool IOCtlVRequest::HasNumberOfValidVectors(const size_t in_count, const size_t 
          std::ranges::all_of(io_vectors, IsValidVector);
 }
 
-void IOCtlRequest::Log(std::string_view device_name, Common::Log::LogType type,
+void IOCtlRequest::Log(const char* device_name, Common::Log::LogType type,
                        Common::Log::LogLevel verbosity) const
 {
-  GENERIC_LOG(type, verbosity, "%.*s (fd %u) - IOCtl %#x (in_size=%#x, out_size=%#x)",
-              static_cast<int>(device_name.size()), device_name.data(), fd, request, buffer_in_size,
-              buffer_out_size);
+  GENERIC_LOG(type, verbosity, "%s (fd %u) - IOCtl %#x (in_size=%#x, out_size=%#x)", device_name,
+              fd, request, buffer_in_size, buffer_out_size);
 }
 
-void IOCtlRequest::Dump(Core::System& system, const std::string& description,
-                        Common::Log::LogType type, Common::Log::LogLevel level) const
+void IOCtlRequest::Dump(Core::System& system, const char* description, Common::Log::LogType type,
+                        Common::Log::LogLevel level) const
+{
+  DumpPrefixed(system, "", description, type, level);
+}
+
+void IOCtlRequest::DumpPrefixed(Core::System& system, const char* prefix, const char* description,
+                                Common::Log::LogType type, Common::Log::LogLevel level) const
 {
   auto& memory = system.GetMemory();
 
-  Log("===== " + description, type, level);
+  GENERIC_LOG(type, level, "===== %s%s (fd %u) - IOCtl %#x (in_size=%#x, out_size=%#x)", prefix,
+              description, fd, request, buffer_in_size, buffer_out_size);
   GENERIC_LOG(
       type, level, "In buffer\n%s",
       HexDump(memory.GetPointerForRange(buffer_in, buffer_in_size), buffer_in_size).c_str());
@@ -152,20 +160,25 @@ void IOCtlRequest::Dump(Core::System& system, const std::string& description,
       HexDump(memory.GetPointerForRange(buffer_out, buffer_out_size), buffer_out_size).c_str());
 }
 
-void IOCtlRequest::DumpUnknown(Core::System& system, const std::string& description,
+void IOCtlRequest::DumpUnknown(Core::System& system, const char* description,
                                Common::Log::LogType type, Common::Log::LogLevel level) const
 {
-  Dump(system, "Unknown IOCtl - " + description, type, level);
+  DumpPrefixed(system, "Unknown IOCtl - ", description, type, level);
 }
 
-void IOCtlVRequest::Dump(Core::System& system, std::string_view description,
-                         Common::Log::LogType type, Common::Log::LogLevel level) const
+void IOCtlVRequest::Dump(Core::System& system, const char* description, Common::Log::LogType type,
+                         Common::Log::LogLevel level) const
+{
+  DumpPrefixed(system, "", description, type, level);
+}
+
+void IOCtlVRequest::DumpPrefixed(Core::System& system, const char* prefix, const char* description,
+                                 Common::Log::LogType type, Common::Log::LogLevel level) const
 {
   auto& memory = system.GetMemory();
 
-  GENERIC_LOG(type, level, "===== %.*s (fd %u) - IOCtlV %#x (%" PRIu64 " in, %" PRIu64 " io)",
-              static_cast<int>(description.size()), description.data(), fd, request,
-              (u64)in_vectors.size(), (u64)io_vectors.size());
+  GENERIC_LOG(type, level, "===== %s%s (fd %u) - IOCtlV %#x (%" PRIu64 " in, %" PRIu64 " io)",
+              prefix, description, fd, request, (u64)in_vectors.size(), (u64)io_vectors.size());
 
   size_t i = 0;
   for (const auto& vector : in_vectors)
@@ -180,20 +193,21 @@ void IOCtlVRequest::Dump(Core::System& system, std::string_view description,
     GENERIC_LOG(type, level, "io[%" PRIu64 "] (size=%#x)", (u64)(i++), vector.size);
 }
 
-void IOCtlVRequest::DumpUnknown(Core::System& system, const std::string& description,
+void IOCtlVRequest::DumpUnknown(Core::System& system, const char* description,
                                 Common::Log::LogType type, Common::Log::LogLevel level) const
 {
-  Dump(system, "Unknown IOCtlV - " + description, type, level);
+  DumpPrefixed(system, "Unknown IOCtlV - ", description, type, level);
 }
 
-Device::Device(Kernel& ios, std::string device_name, const DeviceType type)
-    : m_ios(ios), m_name(std::move(device_name)), m_device_type(type)
+Device::Device(Kernel& ios, const char* device_name, const DeviceType type)
+    : m_ios(ios), m_device_type(type)
 {
+  strlcpy(m_name, device_name, sizeof(m_name));
 }
 
 void Device::DoState(PointerWrap& p)
 {
-  p.Do(m_name);
+  p.DoCString(m_name, sizeof(m_name));
   p.Do(m_device_type);
   p.Do(m_is_active);
 }
@@ -235,7 +249,7 @@ IPCReply Device::Unsupported(const Request& request)
     break;
   }
 
-  WARN_LOG(IOS, "%s does not support %s()", m_name.c_str(), name);
+  WARN_LOG(IOS, "%s does not support %s()", m_name, name);
   return IPCReply{IPC_EINVAL};
 }
 }  // namespace IOS::HLE

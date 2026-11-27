@@ -154,7 +154,7 @@ void WFSIDevice::ExtractFile(void* user, const char* filename, const u8* bytes, 
   f.WriteBytes(bytes, size);
 }
 
-WFSIDevice::WFSIDevice(EmulationKernel& ios, const std::string& device_name)
+WFSIDevice::WFSIDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 }
@@ -659,12 +659,12 @@ u32 WFSIDevice::GetTmd(u16 group_id, u32 title_id, u64 subtitle_id, u32 address,
   return IPC_SUCCESS;
 }
 
-static s32 DeleteTemporaryFiles(const std::string& device_name, u64 title_id)
+static s32 DeleteTemporaryFiles(const char* device_name, u64 title_id)
 {
   File::Delete(WFS::NativePath(
-      StringFromFormat("/vol/%s/tmp/%016" PRIx64 ".ini", device_name.c_str(), (u64)title_id)));
+      StringFromFormat("/vol/%s/tmp/%016" PRIx64 ".ini", device_name, (u64)title_id)));
   File::Delete(WFS::NativePath(
-      StringFromFormat("/vol/%s/tmp/%016" PRIx64 ".ppcini", device_name.c_str(), (u64)title_id)));
+      StringFromFormat("/vol/%s/tmp/%016" PRIx64 ".ppcini", device_name, (u64)title_id)));
   return IPC_SUCCESS;
 }
 
@@ -678,7 +678,7 @@ s32 WFSIDevice::CancelTitleImport(bool continue_install)
         WFS::NativePath(StringFromFormat("/vol/%s/_install", m_device_name.c_str())));
   }
 
-  DeleteTemporaryFiles(m_device_name, m_import_title_id);
+  DeleteTemporaryFiles(m_device_name.c_str(), m_import_title_id);
 
   return IPC_SUCCESS;
 }
@@ -704,7 +704,7 @@ s32 WFSIDevice::CancelPatchImport(bool continue_install)
     }
   }
 
-  DeleteTemporaryFiles(m_device_name, m_current_title_id);
+  DeleteTemporaryFiles(m_device_name.c_str(), m_current_title_id);
 
   return IPC_SUCCESS;
 }

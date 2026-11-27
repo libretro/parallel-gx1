@@ -95,7 +95,7 @@ FSCore::FSCore(Kernel& ios) : m_ios(ios)
 
 FSCore::~FSCore() = default;
 
-FSDevice::FSDevice(EmulationKernel& ios, FSCore& core, const std::string& device_name)
+FSDevice::FSDevice(EmulationKernel& ios, FSCore& core, const char* device_name)
     : EmulationDevice(ios, device_name), m_core(core)
 {
 }

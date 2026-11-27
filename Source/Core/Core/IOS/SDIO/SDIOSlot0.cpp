@@ -24,7 +24,7 @@
 
 namespace IOS::HLE
 {
-SDIOSlot0Device::SDIOSlot0Device(EmulationKernel& ios, const std::string& device_name)
+SDIOSlot0Device::SDIOSlot0Device(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name),
       m_sdhc_supported(HasFeature(ios.GetVersion(), Feature::SDv2))
 {

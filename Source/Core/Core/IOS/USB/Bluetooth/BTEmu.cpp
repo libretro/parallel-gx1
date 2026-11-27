@@ -33,7 +33,7 @@ SQueuedEvent::SQueuedEvent(u32 size_, u16 handle) : size(size_), connection_hand
     PanicAlert("SQueuedEvent: The size is too large.");
 }
 
-BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& device_name)
+BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const char* device_name)
     : BluetoothBaseDevice(ios, device_name)
 {
   queued_events_init(&m_event_queue, 16);

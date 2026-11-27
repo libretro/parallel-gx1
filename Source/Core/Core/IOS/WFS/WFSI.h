@@ -42,7 +42,7 @@ private:
 class WFSIDevice : public EmulationDevice
 {
 public:
-  WFSIDevice(EmulationKernel& ios, const std::string& device_name);
+  WFSIDevice(EmulationKernel& ios, const char* device_name);
 
   IPCReply IOCtl(const IOCtlRequest& request) override;
 

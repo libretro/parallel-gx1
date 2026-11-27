@@ -108,7 +108,7 @@ ESCore::ESCore(Kernel& ios) : m_ios(ios)
 
 ESCore::~ESCore() = default;
 
-ESDevice::ESDevice(EmulationKernel& ios, ESCore& core, const std::string& device_name)
+ESDevice::ESDevice(EmulationKernel& ios, ESCore& core, const char* device_name)
     : EmulationDevice(ios, device_name), m_core(core)
 {
   auto& system = ios.GetSystem();
@@ -615,7 +615,7 @@ IPCReply ESDevice::Close(u32 fd)
 
 IPCReply ESDevice::IOCtlV(const IOCtlVRequest& request)
 {
-  DEBUG_LOG(IOS_ES, "%s (%#x)", GetDeviceName().c_str(), request.request);
+  DEBUG_LOG(IOS_ES, "%s (%#x)", GetDeviceName(), request.request);
   auto context = FindActiveContext(request.fd);
   if (!context)
     return IPCReply(ES_EINVAL);

@@ -29,7 +29,7 @@
 namespace IOS::HLE
 {
 
-BluetoothRealDevice::BluetoothRealDevice(EmulationKernel& ios, const std::string& device_name)
+BluetoothRealDevice::BluetoothRealDevice(EmulationKernel& ios, const char* device_name)
     : BluetoothBaseDevice(ios, device_name)
 {
   LoadLinkKeys();

@@ -15,7 +15,7 @@
 
 namespace IOS::HLE
 {
-NetNCDManageDevice::NetNCDManageDevice(EmulationKernel& ios, const std::string& device_name)
+NetNCDManageDevice::NetNCDManageDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   config.ReadConfig(ios.GetFS());

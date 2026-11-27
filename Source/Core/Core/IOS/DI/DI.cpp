@@ -43,7 +43,7 @@ CoreTiming::EventType* DIDevice::s_finish_executing_di_command;
 // The /dev/di of the running IOS, for the DVD interface's completion callbacks.
 static DIDevice* s_device;
 
-DIDevice::DIDevice(EmulationKernel& ios, const std::string& device_name)
+DIDevice::DIDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   u32_deque_init(&m_commands_to_execute, 16);

@@ -61,7 +61,7 @@ NetWDCommandDevice::Status NetWDCommandDevice::GetTargetStatusForMode(WD::Mode m
   }
 }
 
-NetWDCommandDevice::NetWDCommandDevice(EmulationKernel& ios, const std::string& device_name)
+NetWDCommandDevice::NetWDCommandDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   u32_deque_init(&m_recv_frame_requests, 8);

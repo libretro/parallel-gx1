@@ -14,7 +14,7 @@
 
 namespace IOS::HLE
 {
-ShaDevice::ShaDevice(EmulationKernel& ios, const std::string& device_name)
+ShaDevice::ShaDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 }

@@ -36,7 +36,7 @@ typedef u8 linkkey_t[16];
 class BluetoothRealDevice final : public BluetoothBaseDevice
 {
 public:
-  BluetoothRealDevice(EmulationKernel& ios, const std::string& device_name);
+  BluetoothRealDevice(EmulationKernel& ios, const char* device_name);
   ~BluetoothRealDevice() override;
 
   IPCReply Open(const OpenRequest& request) override;

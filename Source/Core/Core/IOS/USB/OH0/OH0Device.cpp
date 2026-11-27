@@ -4,10 +4,6 @@
 #include "Core/IOS/USB/OH0/OH0Device.h"
 
 #include <cstdlib>
-#include <memory>
-#include <string>
-#include <tuple>
-#include <vector>
 
 #include "Common/ChunkFile.h"
 #include "Common/StringUtil.h"
@@ -16,22 +12,37 @@
 
 namespace IOS::HLE
 {
-static void GetVidPidFromDevicePath(const std::string& device_path, u16& vid, u16& pid)
+// From "/dev/usb/oh0/<vid>/<pid>", its five non-empty '/'-separated parts; left alone otherwise
+static void GetVidPidFromDevicePath(const char* device_path, u16& vid, u16& pid)
 {
-  std::vector<std::string> list = SplitString(device_path, '/');
-  std::erase_if(list, [](const std::string& segment) { return segment.empty(); });
+  const char* parts[5];
+  u32 count = 0;
+  const char* c = device_path;
+  while (*c)
+  {
+    if (*c == '/')
+    {
+      c++;
+      continue;
+    }
+    if (count == 5)
+      return;
+    parts[count++] = c;
+    while (*c && *c != '/')
+      c++;
+  }
 
-  if (list.size() != 5)
+  if (count != 5)
     return;
 
-  vid = static_cast<u16>(strtoul(list[3].c_str(), nullptr, 16));
-  pid = static_cast<u16>(strtoul(list[4].c_str(), nullptr, 16));
+  vid = static_cast<u16>(strtoul(parts[3], nullptr, 16));
+  pid = static_cast<u16>(strtoul(parts[4], nullptr, 16));
 }
 
-OH0Device::OH0Device(EmulationKernel& ios, const std::string& name)
+OH0Device::OH0Device(EmulationKernel& ios, const char* name)
     : EmulationDevice(ios, name, DeviceType::OH0)
 {
-  if (!name.empty())
+  if (*name)
     GetVidPidFromDevicePath(name, m_vid, m_pid);
 }
 

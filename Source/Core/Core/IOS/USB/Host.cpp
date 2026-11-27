@@ -27,7 +27,7 @@ static void FreePendingDevices(USBDeviceList* list)
   delete list;
 }
 
-USBHost::USBHost(EmulationKernel& ios, const std::string& device_name)
+USBHost::USBHost(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
 }
@@ -124,7 +124,7 @@ void USBHost::OnDevicesChangedInternal(const USBDeviceList* new_devices)
       continue;
     }
     USB::Device* const device = usb_device_list_take(&m_devices, i);
-    INFO_LOG(IOS_USB, "%s - Removed device: %04x:%04x", GetDeviceName().c_str(),
+    INFO_LOG(IOS_USB, "%s - Removed device: %04x:%04x", GetDeviceName(),
              (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
     changes = true;
@@ -137,7 +137,7 @@ void USBHost::OnDevicesChangedInternal(const USBDeviceList* new_devices)
     USB::Device* const device = new_devices->devices[i];
     if (!usb_device_list_find(&m_devices, new_devices->ids[i]) && ShouldAddDevice(*device))
     {
-      INFO_LOG(IOS_USB, "%s - New device: %04x:%04x", GetDeviceName().c_str(),
+      INFO_LOG(IOS_USB, "%s - New device: %04x:%04x", GetDeviceName(),
                (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
       changes = true;

@@ -232,7 +232,7 @@ s32 WiiSSLRead(WII_SSL* ssl, u8* data, u32 size)
   return ssl_socket_last_error(ssl->tls) ? SSL_ERR_FAILED : SSL_ERR_ZERO;
 }
 
-NetSSLDevice::NetSSLDevice(EmulationKernel& ios, const std::string& device_name)
+NetSSLDevice::NetSSLDevice(EmulationKernel& ios, const char* device_name)
     : EmulationDevice(ios, device_name)
 {
   for (WII_SSL& ssl : _SSL)

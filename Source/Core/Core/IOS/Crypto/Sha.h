@@ -10,7 +10,7 @@ namespace IOS::HLE
 class ShaDevice final : public EmulationDevice
 {
 public:
-  ShaDevice(EmulationKernel& ios, const std::string& device_name);
+  ShaDevice(EmulationKernel& ios, const char* device_name);
   IPCReply Open(const OpenRequest& request) override;
   IPCReply IOCtlV(const IOCtlVRequest& request) override;
 

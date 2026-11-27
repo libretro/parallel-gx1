@@ -17,7 +17,7 @@ namespace IOS::HLE
 class USB_HIDv4 final : public USBHost
 {
 public:
-  USB_HIDv4(EmulationKernel& ios, const std::string& device_name);
+  USB_HIDv4(EmulationKernel& ios, const char* device_name);
   ~USB_HIDv4() override;
 
   IPCReply IOCtl(const IOCtlRequest& request) override;

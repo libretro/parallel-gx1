@@ -11,7 +11,7 @@ namespace IOS::HLE
 class DolphinDevice final : public EmulationDevice
 {
 public:
-  DolphinDevice(EmulationKernel& ios, const std::string& device_name);
+  DolphinDevice(EmulationKernel& ios, const char* device_name);
   IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
 private:
