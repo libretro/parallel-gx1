@@ -15,11 +15,13 @@
 
 namespace Config
 {
+// Names a setting. The strings are not owned: they are literals for the settings' Infos, and a
+// Location built from other strings is used only while those live.
 struct Location
 {
   System system{};
-  std::string section;
-  std::string key;
+  const char* section = "";
+  const char* key = "";
 
   bool operator==(const Location& other) const;
   bool operator<(const Location& other) const;

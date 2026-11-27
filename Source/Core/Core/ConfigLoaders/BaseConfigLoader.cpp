@@ -95,8 +95,8 @@ void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip)
       std::visit(
           [&](auto* info) {
             char key[SysConf::MAX_NAME_LENGTH + 1];
-            std::snprintf(key, sizeof(key), "%s.%s", info->GetLocation().section.c_str(),
-                          info->GetLocation().key.c_str());
+            std::snprintf(key, sizeof(key), "%s.%s", info->GetLocation().section,
+                          info->GetLocation().key);
 
             if (setting.type == SysConf::Entry::Type::Long)
             {
@@ -163,7 +163,7 @@ public:
 
         for (size_t k = 0; k < section.NumKeys(); k++)
         {
-          const Config::Location location{system.first, section_name, section.KeyName(k)};
+          const Config::Location location{system.first, section_name.c_str(), section.KeyName(k)};
           const bool load_disallowed = std::ranges::any_of(
               s_setting_disallowed, [&location](const auto* l) { return *l == location; });
           if (load_disallowed)
@@ -247,8 +247,7 @@ private:
             [&](auto* info) {
               const Config::Location location = info->GetLocation();
               char key[SysConf::MAX_NAME_LENGTH + 1];
-              std::snprintf(key, sizeof(key), "%s.%s", location.section.c_str(),
-                            location.key.c_str());
+              std::snprintf(key, sizeof(key), "%s.%s", location.section, location.key);
               if (setting.type == SysConf::Entry::Type::Long)
               {
                 layer->Set(location, sysconf.GetData<u32>(key, info->GetDefaultValue()));

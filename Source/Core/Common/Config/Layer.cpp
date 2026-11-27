@@ -58,10 +58,10 @@ static int CompareEntry(const LayerEntry& entry, const Location& location)
 {
   if (entry.system != location.system)
     return entry.system < location.system ? -1 : 1;
-  const int section_compare = strcasecmp(entry.section, location.section.c_str());
+  const int section_compare = strcasecmp(entry.section, location.section);
   if (section_compare != 0)
     return section_compare;
-  return strcasecmp(entry.key, location.key.c_str());
+  return strcasecmp(entry.key, location.key);
 }
 
 u32 Layer::LowerBound(const Location& location, bool* found) const
@@ -126,8 +126,8 @@ bool Layer::Set(const Location& location, const char* new_value)
     return true;
   }
 
-  char* const section = CopyString(location.section.c_str());
-  char* const key = CopyString(location.key.c_str());
+  char* const section = CopyString(location.section);
+  char* const key = CopyString(location.key);
   if (m_entry_count == m_entry_capacity && section && key)
   {
     const u32 capacity = m_entry_capacity ? m_entry_capacity * 2 : 64;

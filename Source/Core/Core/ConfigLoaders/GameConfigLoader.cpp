@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <cstdio>
+#include <cstring>
 
 #include "Common/CommonPaths.h"
 #include "Common/Config/Config.h"
@@ -120,11 +121,14 @@ static const INIToSectionMap& GetINIToSectionMap()
   return ini_to_section;
 }
 
-// Converts from a legacy GameINI section-key tuple to a Location.
+// Converts from a legacy GameINI section-key tuple to a Location, which may point into key and
+// section_buffer, a buffer of SECTION_BUFFER_SIZE.
 // Also supports the following format:
 // [System.Section]
 // Key = Value
-static Location MapINIToRealLocation(const std::string& section, const std::string& key)
+static constexpr size_t SECTION_BUFFER_SIZE = 64;
+static Location MapINIToRealLocation(const std::string& section, const std::string& key,
+                                     char* section_buffer)
 {
   static const INIToLocationMap& ini_to_location = GetINIToLocationMap();
   const auto it = ini_to_location.find({section, key});
@@ -134,24 +138,28 @@ static Location MapINIToRealLocation(const std::string& section, const std::stri
   static const INIToSectionMap& ini_to_section = GetINIToSectionMap();
   const auto it2 = ini_to_section.find(section);
   if (it2 != ini_to_section.end())
-    return {it2->second.system, it2->second.section, key};
+    return {it2->second.system, it2->second.section.c_str(), key.c_str()};
 
   // Attempt to load it as a configuration option
   // It will be in the format of '<System>.<Section>'
   const size_t dot = section.find('.');
   const bool fail = dot == std::string::npos || dot + 1 >= section.size();
   const std::string system_str = section.substr(0, dot);
-  std::string config_section;
+  size_t section_length = 0;
   if (!fail)
   {
     const size_t end = section.find('.', dot + 1);
-    config_section =
-        section.substr(dot + 1, end == std::string::npos ? std::string::npos : end - dot - 1);
+    section_length = (end == std::string::npos ? section.size() : end) - dot - 1;
   }
 
   Config::System system;
-  if (!fail && Config::GetSystemFromName(system_str.c_str(), &system))
-    return {system, config_section, key};
+  if (!fail && section_length < SECTION_BUFFER_SIZE &&
+      Config::GetSystemFromName(system_str.c_str(), &system))
+  {
+    std::memcpy(section_buffer, section.c_str() + dot + 1, section_length);
+    section_buffer[section_length] = '\0';
+    return {system, section_buffer, key.c_str()};
+  }
 
   WARN_LOG(CORE, "Unknown game INI option in section %s: %s", section.c_str(), key.c_str());
   return {Config::System::Main, "", ""};
@@ -232,14 +240,12 @@ private:
       std::string type = use_data.type;
       std::string path = std::string("Profiles/") + use_data.profile_dir + "/";
 
-      const auto control_section = [&](std::string key) {
-        return Config::Location{use_data.system, "Controls", std::move(key)};
-      };
-
       for (const char num : nums)
       {
         std::string profile;
-        if (layer->Get<std::string>(control_section(type + "Profile" + num), &profile))
+        const std::string profile_key = type + "Profile" + num;
+        if (layer->Get<std::string>(
+                Config::Location{use_data.system, "Controls", profile_key.c_str()}, &profile))
         {
           std::string ini_path = File::GetUserPath(D_CONFIG_IDX) + path + profile + ".ini";
           if (!File::Exists(ini_path))
@@ -253,13 +259,13 @@ private:
           profile_ini.Load(ini_path);
 
           const auto* ini_section = profile_ini.GetOrCreateSection("Profile");
+          // the profile directory, then the number
+          char section_name[16];
+          snprintf(section_name, sizeof(section_name), "%s%c", use_data.profile_dir, num);
           for (size_t i = 0; i < ini_section->NumKeys(); i++)
           {
-            const std::string key = ini_section->KeyName(i);
-            const std::string value = ini_section->KeyValue(i);
-            Config::Location location{use_data.system, std::string(use_data.profile_dir) + num,
-                                      key};
-            layer->Set(location, value);
+            const Config::Location location{use_data.system, section_name, ini_section->KeyName(i)};
+            layer->Set(location, ini_section->KeyValue(i));
           }
         }
       }
@@ -274,9 +280,10 @@ private:
     {
       const std::string key = section.KeyName(i);
       const std::string value = section.KeyValue(i);
-      const auto location = MapINIToRealLocation(section_name, key);
+      char section_buffer[SECTION_BUFFER_SIZE];
+      const auto location = MapINIToRealLocation(section_name, key, section_buffer);
 
-      if (location.section.empty() && location.key.empty())
+      if (!*location.section && !*location.key)
         continue;
 
       if (location.system == Config::System::Session)
