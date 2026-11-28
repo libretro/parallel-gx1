@@ -7,7 +7,6 @@
 
 #include "Core/HW/GBAPad.h"
 
-#include "Common/StringUtil.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 #include "InputCommon/GCPadStatus.h"
 
@@ -19,6 +18,7 @@ static const u16 button_bitmasks[] = {PAD_BUTTON_B,  PAD_BUTTON_A,  PAD_TRIGGER_
 
 GBAPad::GBAPad(const unsigned int index) : m_reset_pending(false), m_index(index)
 {
+  snprintf(m_name, sizeof(m_name), "GBA%u", m_index + 1);
   using Translatability = ControllerEmu::Translatability;
 
   // Buttons
@@ -40,9 +40,9 @@ GBAPad::GBAPad(const unsigned int index) : m_reset_pending(false), m_index(index
   }
 }
 
-std::string GBAPad::GetName() const
+const char* GBAPad::GetName() const
 {
-  return StringFromFormat("GBA%u", m_index + 1);
+  return m_name;
 }
 
 InputConfig* GBAPad::GetConfig() const

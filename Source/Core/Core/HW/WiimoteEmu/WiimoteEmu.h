@@ -135,7 +135,7 @@ public:
   explicit Wiimote(unsigned int index);
   ~Wiimote() override;
 
-  std::string GetName() const override;
+  const char* GetName() const override;
 
   InputConfig* GetConfig() const override;
 
@@ -307,6 +307,8 @@ private:
   // Can also be 4 for Balance Board.
   // This is used to look up the user button config.
   const u8 m_index;
+  // The name in config files
+  char m_name[16];
 
   // The Bluetooth 'slot' this device is connected to.
   // This is usually the same as m_index, but can differ during Netplay.

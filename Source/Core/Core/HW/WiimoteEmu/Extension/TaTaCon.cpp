@@ -32,7 +32,7 @@ static const char* const position_names[2] = {
 };
 
 // i18n: The drum controller used in "Taiko no Tatsujin" games. Also known as a "TaTaCon".
-TaTaCon::TaTaCon() : Extension3rdParty("TaTaCon", _trans("Taiko Drum"))
+TaTaCon::TaTaCon() : Extension3rdParty("TaTaCon")
 {
   using Translatability = ControllerEmu::Translatability;
 

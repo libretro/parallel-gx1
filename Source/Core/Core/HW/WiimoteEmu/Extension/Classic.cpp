@@ -40,7 +40,7 @@ static const u16 classic_dpad_bitmasks[4] = {
     Classic::PAD_RIGHT,
 };
 
-Classic::Classic() : Extension1stParty("Classic", _trans("Classic Controller"))
+Classic::Classic() : Extension1stParty("Classic")
 {
   using Translatability = ControllerEmu::Translatability;
 

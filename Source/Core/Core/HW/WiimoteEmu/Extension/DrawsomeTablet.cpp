@@ -18,7 +18,7 @@ namespace WiimoteEmu
 static const u8 drawsome_tablet_id[6] = {0xff, 0x00, 0xa4, 0x20, 0x00, 0x13};
 
 // i18n: The "Drawsome" (combination of "Draw" and "Awesome") tablet wiimote extension by Ubisoft.
-DrawsomeTablet::DrawsomeTablet() : Extension3rdParty("Drawsome", _trans("Drawsome Tablet"))
+DrawsomeTablet::DrawsomeTablet() : Extension3rdParty("Drawsome")
 {
   // Stylus
   AddGroup(m_stylus = new ControllerEmu::AnalogStick(_trans("Stylus"),

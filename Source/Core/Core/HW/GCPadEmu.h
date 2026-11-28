@@ -42,7 +42,7 @@ public:
 
   bool GetMicButton() const;
 
-  std::string GetName() const override;
+  const char* GetName() const override;
 
   InputConfig* GetConfig() const override;
 
@@ -99,4 +99,6 @@ private:
   ControllerEmu::SettingValue<bool> m_always_connected_setting;
 
   const unsigned int m_index;
+  // The name in config files
+  char m_name[16];
 };

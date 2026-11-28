@@ -3,6 +3,8 @@
 
 #include "Core/HW/GCKeyboardEmu.h"
 
+#include <cstdio>
+
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
@@ -53,6 +55,7 @@ static const char* const named_keys5[] = {"LEFT", "DOWN", "UP", "RIGHT", "ENTER"
 
 GCKeyboard::GCKeyboard(const unsigned int index) : m_index(index)
 {
+  snprintf(m_name, sizeof(m_name), "GCKeyboard%u", m_index + 1);
   using Translatability = ControllerEmu::Translatability;
 
   // buttons
@@ -81,9 +84,9 @@ GCKeyboard::GCKeyboard(const unsigned int index) : m_index(index)
     m_keys5x->AddInput(Translatability::DoNotTranslate, key);
 }
 
-std::string GCKeyboard::GetName() const
+const char* GCKeyboard::GetName() const
 {
-  return std::string("GCKeyboard") + char('1' + m_index);
+  return m_name;
 }
 
 InputConfig* GCKeyboard::GetConfig() const

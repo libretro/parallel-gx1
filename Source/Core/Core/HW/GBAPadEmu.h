@@ -27,7 +27,7 @@ public:
   GCPadStatus GetInput();
   void SetReset(bool reset);
 
-  std::string GetName() const override;
+  const char* GetName() const override;
 
   InputConfig* GetConfig() const override;
 
@@ -51,4 +51,6 @@ private:
   bool m_reset_pending;
 
   const unsigned int m_index;
+  // The name in config files
+  char m_name[16];
 };

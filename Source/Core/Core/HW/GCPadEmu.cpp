@@ -3,6 +3,8 @@
 
 #include "Core/HW/GCPadEmu.h"
 
+#include <cstdio>
+
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
@@ -38,6 +40,7 @@ static const u8 triforce_bitmask[] = {SWITCH_TEST, SWITCH_SERVICE, SWITCH_COIN};
 
 GCPad::GCPad(const unsigned int index) : m_index(index)
 {
+  snprintf(m_name, sizeof(m_name), "GCPad%u", m_index + 1);
   using Translatability = ControllerEmu::Translatability;
 
   // buttons
@@ -97,9 +100,9 @@ GCPad::GCPad(const unsigned int index) : m_index(index)
       false);
 }
 
-std::string GCPad::GetName() const
+const char* GCPad::GetName() const
 {
-  return std::string("GCPad") + char('1' + m_index);
+  return m_name;
 }
 
 InputConfig* GCPad::GetConfig() const

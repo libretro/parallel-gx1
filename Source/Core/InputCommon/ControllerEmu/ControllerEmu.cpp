@@ -20,11 +20,6 @@ namespace ControllerEmu
 // This should theoretically be per EmulatedController instance,
 // though no EmulatedController usually run in parallel, so it makes little difference
 
-std::string ControlGroupContainer::GetDisplayName() const
-{
-  return GetName();
-}
-
 EmulatedController::~EmulatedController()
 {
   delete static_cast<DefaultDevice*>(retro_atomic_exchange_ptr(&m_default_device, nullptr));

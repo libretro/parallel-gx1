@@ -11,23 +11,13 @@
 
 namespace WiimoteEmu
 {
-Extension::Extension(const char* name) : Extension(name, name)
+Extension::Extension(const char* name) : m_name(name)
 {
 }
 
-Extension::Extension(const char* config_name, const char* display_name)
-    : m_config_name(config_name), m_display_name(display_name)
+const char* Extension::GetName() const
 {
-}
-
-std::string Extension::GetName() const
-{
-  return m_config_name;
-}
-
-std::string Extension::GetDisplayName() const
-{
-  return m_display_name;
+  return m_name;
 }
 
 None::None() : Extension("None")

@@ -18,7 +18,7 @@ namespace WiimoteEmu
 // TODO: check this (only the last byte is known good)
 static const u8 shinkansen_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x10};
 
-Shinkansen::Shinkansen() : Extension3rdParty("Shinkansen", _trans("Shinkansen Controller"))
+Shinkansen::Shinkansen() : Extension3rdParty("Shinkansen")
 {
   using Translatability = ControllerEmu::Translatability;
 

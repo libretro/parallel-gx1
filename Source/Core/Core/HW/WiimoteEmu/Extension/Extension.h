@@ -19,10 +19,8 @@ class Extension : public ControllerEmu::AttachedController, public I2CSlave
 {
 public:
   explicit Extension(const char* name);
-  Extension(const char* config_name, const char* display_name);
 
-  std::string GetName() const override;
-  std::string GetDisplayName() const override;
+  const char* GetName() const override;
 
   // Used by the wiimote to detect extension changes.
   // The normal extensions short this pin so it's always connected,
@@ -35,8 +33,8 @@ public:
   virtual void Update(const DesiredExtensionState& target_state) = 0;
 
 private:
-  const char* const m_config_name;
-  const char* const m_display_name;
+  // A literal the extension lends
+  const char* const m_name;
 };
 
 class None : public Extension

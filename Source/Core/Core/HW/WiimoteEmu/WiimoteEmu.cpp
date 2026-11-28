@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include <compat/strl.h>
+
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -84,7 +86,7 @@ void Wiimote::Reset()
   if (m_eeprom_dirty)
   {
     // Write out existing EEPROM
-    INFO_LOG(WIIMOTE, "Wrote EEPROM for %s", GetName().c_str());
+    INFO_LOG(WIIMOTE, "Wrote EEPROM for %s", GetName());
     File::IOFile(eeprom_file, "wb").WriteBytes(m_eeprom.data, EEPROM_FREE_SIZE);
 
     m_eeprom_dirty = false;
@@ -194,6 +196,10 @@ void Wiimote::Reset()
 
 Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(index)
 {
+  if (m_index == WIIMOTE_BALANCE_BOARD)
+    strlcpy(m_name, "BalanceBoard", sizeof(m_name));
+  else
+    snprintf(m_name, sizeof(m_name), "Wiimote%u", 1u + m_index);
   m_speaker_logic.SetWiimoteIndex(m_index);
 
   using Translatability = ControllerEmu::Translatability;
@@ -309,11 +315,9 @@ Wiimote::~Wiimote()
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
 }
 
-std::string Wiimote::GetName() const
+const char* Wiimote::GetName() const
 {
-  if (m_index == WIIMOTE_BALANCE_BOARD)
-    return "BalanceBoard";
-  return StringFromFormat("Wiimote%u", 1u + m_index);
+  return m_name;
 }
 
 InputConfig* Wiimote::GetConfig() const

@@ -30,7 +30,7 @@ static const char* const turntable_button_names[6] = {
     _trans("Green Right"), _trans("Red Right"), _trans("Blue Right"),
 };
 
-Turntable::Turntable() : Extension1stParty("Turntable", _trans("DJ Turntable"))
+Turntable::Turntable() : Extension1stParty("Turntable")
 {
   using Translatability = ControllerEmu::Translatability;
 

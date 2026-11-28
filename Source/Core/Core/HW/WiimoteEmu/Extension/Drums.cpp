@@ -38,7 +38,7 @@ static const u8 drum_button_bitmasks[2] = {
     Drums::BUTTON_PLUS,
 };
 
-Drums::Drums() : Extension1stParty("Drums", _trans("Drum Kit"))
+Drums::Drums() : Extension1stParty("Drums")
 {
   using Translatability = ControllerEmu::Translatability;
 

@@ -28,7 +28,7 @@ static const char* const udraw_tablet_button_names[2] = {
     _trans("Rocker Down"),
 };
 
-UDrawTablet::UDrawTablet() : Extension3rdParty("uDraw", _trans("uDraw GameTablet"))
+UDrawTablet::UDrawTablet() : Extension3rdParty("uDraw")
 {
   using Translatability = ControllerEmu::Translatability;
 

@@ -3,6 +3,8 @@
 
 #include "InputCommon/ControllerEmu/ControlGroup/Attachments.h"
 
+#include <cstring>
+
 namespace ControllerEmu
 {
 
@@ -66,11 +68,11 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
   for (n = 0; n < m_num_attachments; n++)
   {
     AttachedController* const ai = m_attachments[n];
-    const std::string attachment_name = ai->GetName();
-    Common::JoinIniKey(key, sizeof(key), base, attachment_name.c_str(), "/");
+    const char* const attachment_name = ai->GetName();
+    Common::JoinIniKey(key, sizeof(key), base, attachment_name, "/");
     ai->LoadGroupsConfig(sec, key);
 
-    if (attachment_name == attachment_text)
+    if (!std::strcmp(attachment_name, attachment_text))
       SetSelectedAttachment(n);
   }
 }
@@ -85,7 +87,11 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
   }
   else if (GetSelectionSetting().IsSimpleValue())
   {
-    sec->Set(key, m_attachments[GetSelectedAttachment()]->GetName(), "None");
+    const char* const attachment_name = m_attachments[GetSelectedAttachment()]->GetName();
+    if (std::strcmp(attachment_name, "None"))
+      sec->SetText(key, attachment_name, std::strlen(attachment_name));
+    else
+      sec->Delete(key);
   }
   else
   {
@@ -95,7 +101,7 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
   u32 i;
   for (i = 0; i < m_num_attachments; i++)
   {
-    if (Common::JoinIniKey(key, sizeof(key), base, m_attachments[i]->GetName().c_str(), "/"))
+    if (Common::JoinIniKey(key, sizeof(key), base, m_attachments[i]->GetName(), "/"))
       m_attachments[i]->SaveGroupsConfig(sec, key);
   }
 }

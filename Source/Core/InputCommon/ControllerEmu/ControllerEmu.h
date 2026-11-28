@@ -210,8 +210,8 @@ public:
   virtual void LoadGroupsConfig(Common::IniFile::Section* sec, const char* base);
   virtual void SaveGroupsConfig(Common::IniFile::Section* sec, const char* base);
 
-  virtual std::string GetName() const = 0;
-  virtual std::string GetDisplayName() const;
+  // The name in config files, kept by the container
+  virtual const char* GetName() const = 0;
 
   void UpdateGroupsReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
