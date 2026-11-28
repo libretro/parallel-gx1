@@ -57,11 +57,14 @@ public:
   // Binds the expression to the devices in env. Builds a new binding and swaps it in, so a
   // thread reading the old one is never disturbed.
   void UpdateReference(ciface::ExpressionParser::ControlEnvironment& env);
-  std::string GetExpression() const;
+  // A malloc'd copy of the expression for the caller to free, null when there is none.
+  char* CopyExpression() const;
   // Whether there is an expression at all, without copying it.
   bool HasExpression() const;
 
-  void SetExpression(std::string expr);
+  void SetExpression(const char* expr);
+  // The expression is length characters, not terminated
+  void SetExpression(const char* expr, size_t length);
 
   ControlState GetRange() const;
   void SetRange(ControlState range);
@@ -70,17 +73,19 @@ protected:
   ControlReference(const ControlReference&) = delete;
   ControlReference& operator=(const ControlReference&) = delete;
 
-  // An expression with what it was parsed into. Never changed once published.
+  // An expression with what it was parsed into, in one block. Never changed once published.
   struct Binding
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    std::string expression;
     ciface::ExpressionParser::ParseStatus status;
     // Owned, null when there is none
     ciface::ExpressionParser::Expression* parsed;
-
-    ~Binding() { ciface::ExpressionParser::FreeExpression(parsed); }
+    size_t expression_length;
+    char expression[1];  // terminated, allocated to fit
   };
+  // Null when out of memory
+  static Binding* NewBinding(const char* expr, size_t length);
+  static void DeleteBinding(Binding* binding);
   static void FreeBinding(quiesce_node_t* node);
   // Only inside an InputReadScope.
   Binding* PeekBinding() const

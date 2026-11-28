@@ -3,6 +3,8 @@
 
 #include "InputCommon/ControlReference/ControlReference.h"
 
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 
 #include "Common/CommonTypes.h"
@@ -27,14 +29,38 @@ bool ControlReference::GetInputGate()
 // Updates a controlreference's binded devices/controls
 // need to call this to re-bind a control reference after changing its expression
 //
+ControlReference::Binding* ControlReference::NewBinding(const char* expr, size_t length)
+{
+  Binding* const b =
+      static_cast<Binding*>(std::malloc(offsetof(Binding, expression) + length + 1));
+  if (!b)
+    return nullptr;
+  std::memset(&b->node, 0, sizeof(b->node));
+  std::memcpy(b->expression, expr, length);
+  b->expression[length] = '\0';
+  b->expression_length = length;
+  const ParseResult parse_result = ParseExpression(b->expression, length);
+  b->status = parse_result.status;
+  b->parsed = parse_result.expr;
+  return b;
+}
+
+void ControlReference::DeleteBinding(Binding* binding)
+{
+  if (!binding)
+    return;
+  FreeExpression(binding->parsed);
+  std::free(binding);
+}
+
 void ControlReference::FreeBinding(quiesce_node_t* node)
 {
-  delete reinterpret_cast<Binding*>(node);
+  DeleteBinding(reinterpret_cast<Binding*>(node));
 }
 
 void ControlReference::Publish(Binding* binding)
 {
-  retro_atomic_store_release_int(&m_has_expression, !binding->expression.empty());
+  retro_atomic_store_release_int(&m_has_expression, binding->expression_length != 0);
   if (void* old = retro_atomic_exchange_ptr(&m_binding, binding))
     quiesce_retire(ciface::InputQuiesce(), &static_cast<Binding*>(old)->node, FreeBinding);
 }
@@ -49,8 +75,9 @@ void ControlReference::UpdateReference(ciface::ExpressionParser::ControlEnvironm
       return;
 
     // A fresh parse to bind, leaving the published one untouched for its readers.
-    auto parse_result = ParseExpression(cur->expression);
-    auto* next = new Binding{{}, cur->expression, parse_result.status, parse_result.expr};
+    Binding* const next = NewBinding(cur->expression, cur->expression_length);
+    if (!next)
+      return;
     if (next->parsed)
       next->parsed->UpdateReferences(env);
 
@@ -60,7 +87,7 @@ void ControlReference::UpdateReference(ciface::ExpressionParser::ControlEnvironm
       quiesce_retire(ciface::InputQuiesce(), &cur->node, FreeBinding);
       return;
     }
-    delete next;
+    DeleteBinding(next);
   }
 }
 
@@ -71,11 +98,16 @@ int ControlReference::BoundCount() const
   return b && b->parsed ? b->parsed->CountNumControls() : 0;
 }
 
-std::string ControlReference::GetExpression() const
+char* ControlReference::CopyExpression() const
 {
   ciface::InputReadScope scope;
   const Binding* const b = PeekBinding();
-  return b ? b->expression : std::string{};
+  if (!b || !b->expression_length)
+    return nullptr;
+  char* const copy = static_cast<char*>(std::malloc(b->expression_length + 1));
+  if (copy)
+    std::memcpy(copy, b->expression, b->expression_length + 1);
+  return copy;
 }
 
 bool ControlReference::HasExpression() const
@@ -83,10 +115,15 @@ bool ControlReference::HasExpression() const
   return retro_atomic_load_acquire_int(&m_has_expression) != 0;
 }
 
-void ControlReference::SetExpression(std::string expr)
+void ControlReference::SetExpression(const char* expr)
 {
-  auto parse_result = ParseExpression(expr);
-  Publish(new Binding{{}, std::move(expr), parse_result.status, parse_result.expr});
+  SetExpression(expr, std::strlen(expr));
+}
+
+void ControlReference::SetExpression(const char* expr, size_t length)
+{
+  if (Binding* const binding = NewBinding(expr, length))
+    Publish(binding);
 }
 
 ControlState ControlReference::GetRange() const
@@ -111,7 +148,7 @@ ControlReference::ControlReference(Kind kind) : m_kind(kind)
 
 ControlReference::~ControlReference()
 {
-  delete static_cast<Binding*>(retro_atomic_exchange_ptr(&m_binding, nullptr));
+  DeleteBinding(static_cast<Binding*>(retro_atomic_exchange_ptr(&m_binding, nullptr)));
 }
 
 ControlState ControlReference::State(const ControlState state)

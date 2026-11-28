@@ -1407,12 +1407,12 @@ ParseResult ParseTokens(const Token* tokens)
   return Parser(tokens).Parse();
 }
 
-static ParseResult ParseComplexExpression(const std::string& str)
+static ParseResult ParseComplexExpression(const char* str, std::size_t length)
 {
   // one token at most for each character, and EOF
-  Token* const tokens = static_cast<Token*>(std::malloc((str.size() + 1) * sizeof(Token)));
+  Token* const tokens = static_cast<Token*>(std::malloc((length + 1) * sizeof(Token)));
   std::size_t count;
-  Lexer l(str.data(), str.size());
+  Lexer l(str, length);
   if (!tokens)
     return ParseResult::MakeErrorResult();
   const ParseStatus tokenize_status = l.Tokenize(tokens, &count);
@@ -1426,23 +1426,29 @@ static ParseResult ParseComplexExpression(const std::string& str)
   return result;
 }
 
-static Expression* ParseBarewordExpression(const std::string& str)
+static Expression* ParseBarewordExpression(const char* str, std::size_t length)
 {
   ControlQualifier qualifier;
-  qualifier.SetControlName(str.c_str(), str.size());
+  qualifier.SetControlName(str, length);
   qualifier.has_device = false;
 
   // This control expression will only work (find the specified control) with the default device.
   return new ControlExpression(std::move(qualifier));
 }
 
-ParseResult ParseExpression(const std::string& str)
+ParseResult ParseExpression(const char* str, std::size_t length)
 {
-  if (StripWhitespace(str).empty())
+  std::size_t i;
+  for (i = 0; i < length; i++)
+  {
+    if (str[i] != ' ' && str[i] != '\t' && str[i] != '\r' && str[i] != '\n')
+      break;
+  }
+  if (i == length)
     return ParseResult::MakeEmptyResult();
 
-  Expression* const bareword_expr = ParseBarewordExpression(str);
-  ParseResult complex_result = ParseComplexExpression(str);
+  Expression* const bareword_expr = ParseBarewordExpression(str, length);
+  ParseResult complex_result = ParseComplexExpression(str, length);
 
   if (complex_result.status != ParseStatus::Successful)
   {

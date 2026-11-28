@@ -19,6 +19,13 @@
 
 namespace ControllerEmu
 {
+// Sets ref to the expression under key, or to none when there is no key.
+void LoadExpressionFromIni(const Common::IniFile::Section& section, const char* key,
+                           ControlReference* ref);
+// Writes ref's expression under key on one line, removing the key when it is default_value.
+void SaveExpressionToIni(Common::IniFile::Section& section, const char* key,
+                         const ControlReference& ref, const char* default_value);
+
 /* A setting's value lives in one atomic 64-bit word, as its bits. */
 inline s64 SettingToBits(double value)
 {

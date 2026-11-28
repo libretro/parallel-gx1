@@ -255,15 +255,6 @@ std::string_view StripSpaces(std::string_view str)
 }
 
 // Turns "\n\rhello" into "  hello".
-void ReplaceBreaksWithSpaces(std::string& str)
-{
-  for (char& c : str)
-  {
-    if (c == '\r' || c == '\n')
-      c = ' ';
-  }
-}
-
 void TruncateToCString(std::string* s)
 {
   const size_t terminator = s->find_first_of('\0');

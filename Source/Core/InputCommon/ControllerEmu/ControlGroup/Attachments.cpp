@@ -53,9 +53,10 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
 
   SetSelectedAttachment(0);
 
-  std::string attachment_text;
   Common::JoinIniKey(key, sizeof(key), base, name);
-  sec->Get(key, &attachment_text, "");
+  const char* attachment_text = ini_section_get(sec->Data(), key, std::strlen(key));
+  if (!attachment_text)
+    attachment_text = "";
 
   // First assume attachment string is a valid expression.
   // If it instead matches one of the names of our attachments it is overridden below.
@@ -88,9 +89,7 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
   }
   else
   {
-    std::string expression = GetSelectionSetting().GetInputReference().GetExpression();
-    ReplaceBreaksWithSpaces(expression);
-    sec->Set(key, expression, "None");
+    SaveExpressionToIni(*sec, key, GetSelectionSetting().GetInputReference(), "None");
   }
 
   u32 i;

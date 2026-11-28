@@ -253,7 +253,8 @@ struct ParseResult
   Expression* expr;
 };
 
-ParseResult ParseExpression(const std::string& expr);
+// The expression is length characters, not terminated
+ParseResult ParseExpression(const char* expr, std::size_t length);
 ParseResult ParseTokens(const Token* tokens);
 
 }  // namespace ciface::ExpressionParser

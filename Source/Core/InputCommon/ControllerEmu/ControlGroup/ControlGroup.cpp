@@ -117,13 +117,9 @@ void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* 
   for (i = 0; i < num_controls; i++)
   {
     Control* const c = controls[i];
-    {
-      // control expression
-      std::string expression;
-      Common::JoinIniKey(key, sizeof(key), group, c->name);
-      sec->Get(key, &expression, "");
-      c->control_ref->SetExpression(std::move(expression));
-    }
+    // control expression
+    Common::JoinIniKey(key, sizeof(key), group, c->name);
+    LoadExpressionFromIni(*sec, key, c->control_ref);
 
     // range
     double range = 100.0;
@@ -151,11 +147,8 @@ void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const char* 
   {
     Control* const c = controls[i];
     // control expression
-    std::string expression = c->control_ref->GetExpression();
-    // We can't save line breaks in a single line config. Restoring them is too complicated.
-    ReplaceBreaksWithSpaces(expression);
     if (Common::JoinIniKey(key, sizeof(key), group, c->name))
-      sec->Set(key, expression, "");
+      SaveExpressionToIni(*sec, key, *c->control_ref, "");
 
     // range
     if (Common::JoinIniKey(key, sizeof(key), group, c->name, "/Range"))
@@ -176,7 +169,7 @@ void ControlGroup::UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvi
     numeric_settings[i]->GetInputReference().UpdateReference(env);
 }
 
-void ControlGroup::SetControlExpression(int index, const std::string& expression)
+void ControlGroup::SetControlExpression(int index, const char* expression)
 {
   if (index >= 0 && index < num_controls)
     controls[index]->control_ref->SetExpression(expression);

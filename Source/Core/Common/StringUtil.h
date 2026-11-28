@@ -44,8 +44,6 @@ std::string_view StripSpaces(std::string_view s);
 
 std::string ReplaceAll(std::string result, std::string_view src, std::string_view dest);
 
-void ReplaceBreaksWithSpaces(std::string& str);
-
 void TruncateToCString(std::string* s);
 
 // The TryParse forms read a terminated string; those taking a std::string read its text.

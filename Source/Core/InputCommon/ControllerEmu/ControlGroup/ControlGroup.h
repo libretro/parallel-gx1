@@ -71,7 +71,7 @@ public:
 
   void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
-  void SetControlExpression(int index, const std::string& expression);
+  void SetControlExpression(int index, const char* expression);
 
   // The names are literals the controls lend
   void AddInput(Translatability translate, const char* name);

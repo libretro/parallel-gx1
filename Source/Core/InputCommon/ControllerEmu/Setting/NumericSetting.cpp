@@ -3,8 +3,43 @@
 
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
 
+#include <cstdlib>
+#include <cstring>
+
 namespace ControllerEmu
 {
+void LoadExpressionFromIni(const Common::IniFile::Section& section, const char* key,
+                           ControlReference* ref)
+{
+  const char* const found = ini_section_get(section.Data(), key, std::strlen(key));
+  ref->SetExpression(found ? found : "");
+}
+
+void SaveExpressionToIni(Common::IniFile::Section& section, const char* key,
+                         const ControlReference& ref, const char* default_value)
+{
+  char* const expression = ref.CopyExpression();
+  const char* value = "";
+  size_t length = 0;
+  if (expression)
+  {
+    // We can't save line breaks in a single line config. Restoring them is too complicated.
+    char* c;
+    for (c = expression; *c; c++)
+    {
+      if (*c == '\r' || *c == '\n')
+        *c = ' ';
+    }
+    value = expression;
+    length = static_cast<size_t>(c - expression);
+  }
+  if (std::strcmp(value, default_value))
+    section.SetText(key, value, length);
+  else
+    section.Delete(key);
+  std::free(expression);
+}
+
 NumericSetting::NumericSetting(SettingValue<int>* value, const NumericSettingDetails& details,
                                int default_value, int, int)
     : m_bits(&value->m_value), m_input(&value->m_input), m_ini_name(details.ini_name),
@@ -79,10 +114,12 @@ void NumericSetting::SetValue(double value)
 void NumericSetting::LoadFromIni(const Common::IniFile::Section& section, const char* group_name)
 {
   char key[256];
-  std::string str_value;
-  if (Common::JoinIniKey(key, sizeof(key), group_name, m_ini_name) && section.Get(key, &str_value))
+  const char* found = nullptr;
+  if (Common::JoinIniKey(key, sizeof(key), group_name, m_ini_name))
+    found = ini_section_get(section.Data(), key, std::strlen(key));
+  if (found)
   {
-    m_input->SetExpression(std::move(str_value));
+    m_input->SetExpression(found);
     SimplifyIfPossible();
   }
   else
@@ -114,16 +151,22 @@ void NumericSetting::SaveToIni(Common::IniFile::Section& section, const char* gr
   }
   else
   {
-    // We can't save line breaks in a single line config. Restoring them is too complicated.
-    std::string expression = m_input->GetExpression();
-    ReplaceBreaksWithSpaces(expression);
-    section.Set(key, expression, "");
+    SaveExpressionToIni(section, key, *m_input, "");
   }
 }
 
 void NumericSetting::SimplifyIfPossible()
 {
-  const std::string text(StripWhitespace(m_input->GetExpression()));
+  char* const expression = m_input->CopyExpression();
+  // The expression without the whitespace around it; none reads as empty text
+  char empty[1] = {'\0'};
+  char* text = expression ? expression : empty;
+  char* end = text + std::strlen(text);
+  while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n')
+    text++;
+  while (end > text && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r' || end[-1] == '\n'))
+    end--;
+  *end = '\0';
   switch (m_type)
   {
   case Type::Int:
@@ -148,5 +191,6 @@ void NumericSetting::SimplifyIfPossible()
     break;
   }
   }
+  std::free(expression);
 }
 }  // namespace ControllerEmu
